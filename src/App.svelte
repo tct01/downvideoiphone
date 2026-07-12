@@ -356,26 +356,29 @@
     const fmt = (media.format || '').toUpperCase();
     const allText = `${label} ${fmt}`;
 
-    if (allText.includes('2160') || allText.includes('4K')) {
-      return { text: '4K', class: 'badge-4k' };
-    }
-    if (allText.includes('1440') || allText.includes('2K')) {
-      return { text: '2K', class: 'badge-2k' };
-    }
-    if (allText.includes('1080') || allText.includes('720') || allText.includes('HD')) {
-      return { text: 'HD', class: 'badge-hd' };
-    }
     if (
-      allText.includes('MP3') ||
-      allText.includes('AAC') ||
-      allText.includes('M4A') ||
-      allText.includes('OPUS') ||
-      allText.includes('OGG') ||
+      media.kind === 'audio' ||
+      ['MP3', 'AAC', 'M4A', 'OPUS', 'OGG', 'WAV', 'FLAC'].includes(fmt) ||
       allText.includes('AUDIO')
     ) {
-      return { text: 'MP3', class: 'badge-audio' };
+      return { text: fmt === 'UNKNOWN' || !fmt ? 'Audio' : fmt, class: 'badge-audio' };
+    }
+
+    if ((media.quality ?? 0) >= 2160 || allText.includes('2160') || allText.includes('4K')) {
+      return { text: '4K', class: 'badge-4k' };
+    }
+    if ((media.quality ?? 0) >= 1440 || allText.includes('1440') || allText.includes('2K')) {
+      return { text: '2K', class: 'badge-2k' };
+    }
+    if ((media.quality ?? 0) >= 720 || allText.includes('1080') || allText.includes('720') || allText.includes('HD')) {
+      return { text: 'HD', class: 'badge-hd' };
     }
     return { text: 'SD', class: 'badge-sd' };
+  }
+
+  function getNumericProgress(index: number): number | null {
+    const value = mediaProgress[index];
+    return typeof value === 'number' ? Math.max(0, Math.min(100, value)) : null;
   }
 
   $: mediaCount = result?.medias?.length ?? 0;
@@ -463,20 +466,28 @@
               <button class="view" type="button" on:click={() => (previewingIndex = previewingIndex === 0 ? null : 0)}>{previewingIndex === 0 ? 'Đóng video' : 'Xem video'}</button>
               <button class="save" type="button" on:click={() => saveMedia(bestMedia!, 0)} disabled={mediaStates[0] === 'loading' || savingIndex === 0}>
                 {#if mediaStates[0] === 'loading'}
-                  <span class="mini-loader" aria-hidden="true"></span> 
-                  {#if typeof mediaProgress[0] === 'number'}
-                    Đang tải {mediaProgress[0]}%
-                  {:else}
-                    Đang tải {mediaProgress[0] || ''}
-                  {/if}
+                  <span
+                    class:indeterminate={getNumericProgress(0) === null}
+                    class="download-progress"
+                    style={`--progress-ratio: ${(getNumericProgress(0) ?? 0) / 100}`}
+                    aria-hidden="true"
+                  ></span>
+                  <span class="download-button-content">
+                    <span class="mini-loader" aria-hidden="true"></span>
+                    {#if getNumericProgress(0) !== null}
+                      Đang tải {getNumericProgress(0)}%
+                    {:else}
+                      Đang tải {mediaProgress[0] || ''}
+                    {/if}
+                  </span>
                 {:else if savingIndex === 0}
-                  <span class="mini-loader" aria-hidden="true"></span> Đang mở…
+                  <span class="download-button-content"><span class="mini-loader" aria-hidden="true"></span> Đang mở…</span>
                 {:else if mediaStates[0] === 'error'}
-                  {mediaNeedsRefresh[0] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span>
+                  <span class="download-button-content">{mediaNeedsRefresh[0] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span></span>
                 {:else if mediaStates[0] === 'ready'}
-                  Lưu video <span aria-hidden="true">↑</span>
+                  <span class="download-button-content">Lưu video <span aria-hidden="true">↑</span></span>
                 {:else}
-                  Tải & lưu <span aria-hidden="true">↑</span>
+                  <span class="download-button-content">Tải & lưu <span aria-hidden="true">↑</span></span>
                 {/if}
               </button>
             </div>
@@ -499,20 +510,28 @@
                         </span>
                         <button class="save-option" type="button" on:click={() => saveMedia(media, index)} disabled={mediaStates[index] === 'loading' || savingIndex === index}>
                           {#if mediaStates[index] === 'loading'}
-                            <span class="mini-loader" aria-hidden="true"></span> 
-                            {#if typeof mediaProgress[index] === 'number'}
-                              {mediaProgress[index]}%
-                            {:else}
-                              {mediaProgress[index] || ''}
-                            {/if}
+                            <span
+                              class:indeterminate={getNumericProgress(index) === null}
+                              class="download-progress"
+                              style={`--progress-ratio: ${(getNumericProgress(index) ?? 0) / 100}`}
+                              aria-hidden="true"
+                            ></span>
+                            <span class="download-button-content">
+                              <span class="mini-loader" aria-hidden="true"></span>
+                              {#if getNumericProgress(index) !== null}
+                                {getNumericProgress(index)}%
+                              {:else}
+                                {mediaProgress[index] || ''}
+                              {/if}
+                            </span>
                           {:else if savingIndex === index}
-                            <span class="mini-loader" aria-hidden="true"></span> Đang mở…
+                            <span class="download-button-content"><span class="mini-loader" aria-hidden="true"></span> Đang mở…</span>
                           {:else if mediaStates[index] === 'error'}
-                            {mediaNeedsRefresh[index] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span>
+                            <span class="download-button-content">{mediaNeedsRefresh[index] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span></span>
                           {:else if mediaStates[index] === 'ready'}
-                            Lưu <span aria-hidden="true">↑</span>
+                            <span class="download-button-content">Lưu <span aria-hidden="true">↑</span></span>
                           {:else}
-                            Tải <span aria-hidden="true">↑</span>
+                            <span class="download-button-content">Tải <span aria-hidden="true">↑</span></span>
                           {/if}
                         </button>
                       </div>
