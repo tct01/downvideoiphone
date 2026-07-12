@@ -10,6 +10,7 @@ export async function initProxy() {
   }
 
   try {
+    // @ts-ignore
     const { ProxyAgent, setGlobalDispatcher } = await import('undici');
     const proxyAgent = new ProxyAgent(proxyUrl);
     setGlobalDispatcher(proxyAgent);
