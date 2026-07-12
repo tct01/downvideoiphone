@@ -19,7 +19,9 @@ const ALLOWED_MEDIA_DOMAINS = [
   'kwai.net',
   'kwaicdn.com',
   'xiaohongshu.com',
-  'xhscdn.com'
+  'xhscdn.com',
+  'gendownload.com',
+  'dl.gendownload.com'
 ];
 
 function isAllowedMediaUrl(value: string): boolean {
