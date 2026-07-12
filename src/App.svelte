@@ -238,7 +238,6 @@
       <span class="brand-copy"><strong>ClipSave</strong><small>Tải video đa nền tảng</small></span>
     </a>
     <div class="header-meta">
-      <span class="support-count">9 nền tảng</span>
       <span class="status-pill"><i></i> Sẵn sàng</span>
     </div>
   </header>

@@ -21,7 +21,8 @@ const ALLOWED_MEDIA_DOMAINS = [
   'xiaohongshu.com',
   'xhscdn.com',
   'gendownload.com',
-  'dl.gendownload.com'
+  'dl.gendownload.com',
+  'snap-video.com'
 ];
 
 function isAllowedMediaUrl(value: string): boolean {

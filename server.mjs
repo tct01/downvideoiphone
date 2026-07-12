@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(fileURLToPath(new URL('.', import.meta.url)), 'dist');
 const port = Number(process.env.PORT || 5173);
 const mimeTypes = { '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.webp': 'image/webp', '.png': 'image/png', '.ico': 'image/x-icon' };
-const allowedDomains = ['tiktokcdn.com', 'tokcdn.com', 'byteoversea.com', 'ibytedtos.com', 'douyinvod.com', 'facebook.com', 'fbcdn.net', 'instagram.com', 'cdninstagram.com', 'googlevideo.com', 'youtube.com', 'twimg.com', 'bilibili.com', 'bilivideo.com', 'kwai.com', 'kwai.net', 'kwaicdn.com', 'xiaohongshu.com', 'xhscdn.com', 'gendownload.com', 'dl.gendownload.com'];
+const allowedDomains = ['tiktokcdn.com', 'tokcdn.com', 'byteoversea.com', 'ibytedtos.com', 'douyinvod.com', 'facebook.com', 'fbcdn.net', 'instagram.com', 'cdninstagram.com', 'googlevideo.com', 'youtube.com', 'twimg.com', 'bilibili.com', 'bilivideo.com', 'kwai.com', 'kwai.net', 'kwaicdn.com', 'xiaohongshu.com', 'xhscdn.com', 'gendownload.com', 'dl.gendownload.com', 'snap-video.com'];
 
 function isAllowedMediaUrl(value) {
   try {
