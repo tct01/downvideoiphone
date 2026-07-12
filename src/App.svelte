@@ -1,19 +1,14 @@
 <script lang="ts">
-  type Media = { url: string; format?: string | null; fileSize?: number | null; sizeStr?: string | null };
-  type ApiResponse = {
-    code?: string;
-    msg?: string;
-    data?: { title?: string; imageUrl?: string; duration?: string | null; medias?: Media[]; images?: string[] };
-  };
+  type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null };
+  type VideoResult = { title?: string | null; imageUrl?: string | null; duration?: string | null; media: Media };
 
-  const endpoint = import.meta.env.VITE_API_ENDPOINT || 'https://n8n.tocongtruong.works/webhook/autodownvideo';
   const platforms = ['Youtube', 'Tiktok', 'Xiaohongshu', 'Instagram', 'Twitter/X', 'Douyin', 'Bilibili', 'Facebook', 'Kwai'];
 
   let link = '';
   let selectedPlatform = 'Tiktok';
   let status: 'idle' | 'loading' | 'success' | 'error' = 'idle';
   let error = '';
-  let result: NonNullable<ApiResponse['data']> | null = null;
+  let result: { title?: string | null; imageUrl?: string | null; duration?: string | null; medias: Media[] } | null = null;
   let savingIndex: number | null = null;
   let previewingIndex: number | null = null;
   let preparedFiles: Array<File | null> = [];
@@ -32,74 +27,38 @@
     }
   };
 
-  /** Trích xuất URL đầu tiên từ bất kỳ đoạn văn bản nào (hỗ trợ link chia sẻ Douyin, TikTok, v.v.) */
+  /** Trích xuất URL đầu tiên từ bất kỳ đoạn văn bản nào */
   function extractUrl(text: string): string {
     const match = text.match(/https?:\/\/[^\s\u4e00-\u9fff\u3000-\u303f\uff00-\uffef，。！？、「」【】《》]+/i);
-    return match ? match[0].replace(/[.,!?;:)\]}>"']+$/, '') : text;
+    if (!match) return text;
+    const extracted = match[0].replace(/[.,!?;:)\]}>\"']+$/, '');
+    return isValidLink(extracted) ? extracted : text;
   }
 
-  /** Gọi GenDownload API và chuẩn hoá thành định dạng nội bộ */
-  async function fetchFromGendownload(videoUrl: string): Promise<NonNullable<ApiResponse['data']>> {
-    const res = await fetch('https://gendownload.com/api/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ url: videoUrl })
-    });
-    if (!res.ok) throw new Error(`GenDownload trả về mã ${res.status}`);
-
-    const gd = (await res.json()) as {
-      title?: string;
-      thumbnail?: string;
-      duration?: number;
-      formats?: Array<{ label?: string; type?: string; ext?: string; filesize?: number; url: string }>;
-    };
-
-    if (!gd.formats || gd.formats.length === 0) {
-      throw new Error('Không tìm thấy video có thể tải từ liên kết này.');
-    }
-
-    const medias: Media[] = gd.formats.map((f) => ({
-      url: f.url,
-      // Nếu type là audio thì đánh dấu để pickBestMp4 lọc ra
-      format: f.type === 'audio' ? (f.ext ?? 'audio') : (f.ext ?? 'mp4'),
-      fileSize: f.filesize ?? null,
-      sizeStr: f.filesize ? `${(f.filesize / 1_048_576).toFixed(1)} MB` : null
-    }));
-
-    return {
-      title: gd.title,
-      imageUrl: gd.thumbnail,
-      duration: gd.duration != null ? String(gd.duration) : null,
-      medias
-    };
-  }
-
-  /**
-   * Chọn video MP4 chất lượng tốt nhất từ danh sách medias.
-   * Loại bỏ audio-only / mp3, ưu tiên fileSize lớn nhất.
-   */
-  function pickBestMp4(medias: Media[]): Media | null {
-    const videoOnly = medias.filter((m) => {
-      const fmt = (m.format ?? '').toLowerCase();
-      // Loại bỏ audio-only formats
-      if (['mp3', 'aac', 'm4a', 'opus', 'ogg', 'audio'].some((a) => fmt.includes(a))) return false;
-      // Giữ lại mp4 hoặc không rõ format (mặc định coi là video)
-      return true;
-    });
-    if (videoOnly.length === 0) return medias[0] ?? null;
-    // Sắp xếp theo fileSize giảm dần để lấy chất lượng cao nhất
-    videoOnly.sort((a, b) => (b.fileSize ?? 0) - (a.fileSize ?? 0));
-    return videoOnly[0];
+  /** Tự detect nền tảng từ hostname */
+  function detectPlatform(url: string): string {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      if (host.includes('youtube.com') || host.includes('youtu.be')) return 'Youtube';
+      if (host.includes('tiktok.com')) return 'Tiktok';
+      if (host.includes('douyin.com')) return 'Douyin';
+      if (host.includes('instagram.com')) return 'Instagram';
+      if (host.includes('facebook.com') || host.includes('fb.watch')) return 'Facebook';
+      if (host.includes('twitter.com') || host.includes('x.com')) return 'Twitter/X';
+      if (host.includes('bilibili.com')) return 'Bilibili';
+      if (host.includes('kwai.com')) return 'Kwai';
+      if (host.includes('xiaohongshu.com') || host.includes('xhs.cn')) return 'Xiaohongshu';
+    } catch { /* ignore */ }
+    return 'Video';
   }
 
   async function pasteLink() {
     pasteHint = false;
     error = '';
     try {
-      if (!navigator.clipboard?.readText) throw new Error('Clipboard API unavailable');
+      if (!navigator.clipboard?.readText) throw new Error('unavailable');
       const clipboardText = await navigator.clipboard.readText();
-      if (!clipboardText.trim()) throw new Error('Clipboard is empty');
-      // Tự động trích xuất URL nếu văn bản dán chứa link lẫn chữ (Douyin, TikTok share text…)
+      if (!clipboardText.trim()) throw new Error('empty');
       link = extractUrl(clipboardText.trim());
       if (!result) status = 'idle';
     } catch {
@@ -129,47 +88,40 @@
     }
 
     status = 'loading';
+    selectedPlatform = detectPlatform(link.trim());
 
-    // --- Bước 1: thử nguồn chính (n8n) ---
-    let data: NonNullable<ApiResponse['data']> | null = null;
     try {
-      const url = new URL(endpoint);
-      url.searchParams.set('link', link.trim());
-      const response = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`Máy chủ trả về mã ${response.status}`);
+      const reqUrl = new URL('/api/video', window.location.origin);
+      reqUrl.searchParams.set('link', link.trim());
+      const response = await fetch(reqUrl.toString(), {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(40_000)
+      });
 
-      const payload = (await response.json()) as ApiResponse;
-      const mediaItems = payload.data?.medias ?? [];
-      if (payload.code !== '0000' || !payload.data || mediaItems.length === 0) {
-        throw new Error(payload.msg || 'Không tìm thấy video.');
+      const payload = (await response.json()) as VideoResult & { error?: string };
+
+      if (!response.ok || !payload.media) {
+        throw new Error(payload.error || 'Không tìm thấy video có thể tải từ liên kết này.');
       }
-      data = payload.data;
-    } catch {
-      // --- Bước 2: fallback sang GenDownload ---
-      try {
-        data = await fetchFromGendownload(link.trim());
-      } catch (fallbackCause) {
-        if (runId !== preparationId) return;
-        status = 'error';
-        error = fallbackCause instanceof Error
-          ? fallbackCause.message
-          : 'Không thể phân tích liên kết. Vui lòng thử lại.';
-        return;
-      }
-    }
 
-    if (runId !== preparationId) return;
-
-    const bestMedia = pickBestMp4(data.medias ?? []);
-    if (!bestMedia) {
+      if (runId !== preparationId) return;
+      result = {
+        title: payload.title,
+        imageUrl: payload.imageUrl,
+        duration: payload.duration,
+        medias: [payload.media]
+      };
+      status = 'success';
+      prepareMediaFiles([payload.media], runId);
+    } catch (cause) {
+      if (runId !== preparationId) return;
       status = 'error';
-      error = 'Không tìm thấy video có thể tải từ liên kết này.';
-      return;
+      const msg = cause instanceof Error ? cause.message : '';
+      // Không hiển thị tên service bên thứ 3 trong thông báo lỗi
+      error = msg && !msg.startsWith('primary:') && !msg.startsWith('fallback:') && msg !== 'no_media'
+        ? msg
+        : 'Không thể tải video. Vui lòng thử lại.';
     }
-
-    result = { ...data, medias: [bestMedia] };
-    status = 'success';
-    prepareMediaFiles([bestMedia], runId);
   }
 
   async function prepareOneFile(media: Media, index: number, runId: number) {
@@ -364,5 +316,5 @@
     </section>
   {/if}
 
-  <footer><span>ClipSave</span><span>•</span><span>Tô Công Trường @2026</span></footer>
+  <footer><span>ClipSave</span><span>•</span><span>Tô Công Trường ©2026</span></footer>
 </main>
