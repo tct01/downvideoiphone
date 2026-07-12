@@ -24,9 +24,9 @@ import type { Provider } from './_shared/provider.js';
 
 /** Danh sách providers theo thứ tự ưu tiên — thêm/bớt ở đây */
 const PROVIDERS: Provider[] = [
+  seekinProvider,
   snapVideoProvider,
   gendownloadProvider,
-  seekinProvider,
 ];
 
 export async function GET(request: Request): Promise<Response> {
@@ -42,8 +42,13 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
+    const isYouTube = link.includes('youtube.com') || link.includes('youtu.be');
+    const providers = isYouTube
+      ? [snapVideoProvider, seekinProvider, gendownloadProvider]
+      : PROVIDERS;
+
     // Thử lần lượt từng provider cho đến khi thành công
-    const rawData = await tryProviders(PROVIDERS, link.trim());
+    const rawData = await tryProviders(providers, link.trim());
     const normalized = normalizeVideoData(rawData);
     const data = {
       ...normalized,
