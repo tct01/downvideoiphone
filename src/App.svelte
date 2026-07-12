@@ -1,6 +1,6 @@
 <script lang="ts">
-  type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null };
-  type VideoResult = { title?: string | null; imageUrl?: string | null; duration?: string | null; media: Media };
+  type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null; kind?: 'video' | 'audio'; mimeType?: string | null; quality?: number | null; hasAudio?: boolean | null; proxyToken?: string; proxyExpires?: number };
+  type VideoResult = { title?: string | null; imageUrl?: string | null; duration?: string | null; media: Media; medias?: Media[] };
 
   const platforms = ['Youtube', 'Tiktok', 'Xiaohongshu', 'Instagram', 'Twitter/X', 'Douyin', 'Bilibili', 'Facebook', 'Kwai'];
 
@@ -12,11 +12,15 @@
   let savingIndex: number | null = null;
   let previewingIndex: number | null = null;
   let preparedFiles: Array<File | null> = [];
-  let mediaStates: Array<'loading' | 'ready' | 'error'> = [];
-  let mediaProgress: number[] = [];
+  let mediaStates: Array<'idle' | 'loading' | 'ready' | 'error'> = [];
+  let mediaProgress: Array<number | string> = [];
+  let mediaAbortControllers: Array<AbortController | null> = [];
+  let shareFailures: number[] = [];
+  let mediaNeedsRefresh: boolean[] = [];
   let preparationId = 0;
   let linkInput: HTMLInputElement;
   let pasteHint = false;
+  let showAllOptions = false;
 
   const isValidLink = (value: string) => {
     try {
@@ -69,6 +73,7 @@
   }
 
   async function analyse() {
+    mediaAbortControllers.forEach((controller) => controller?.abort());
     const runId = ++preparationId;
     error = '';
     result = null;
@@ -76,6 +81,9 @@
     preparedFiles = [];
     mediaStates = [];
     mediaProgress = [];
+    mediaAbortControllers = [];
+    shareFailures = [];
+    mediaNeedsRefresh = [];
 
     // Tự động trích xuất URL nếu người dùng dán cả đoạn share text
     const cleanLink = extractUrl(link.trim());
@@ -105,14 +113,27 @@
       }
 
       if (runId !== preparationId) return;
+      const seenUrls = new Set<string>();
+      const allMedias = [payload.media, ...(payload.medias ?? [])].filter((media) => {
+        if (!media?.url || seenUrls.has(media.url)) return false;
+        seenUrls.add(media.url);
+        return true;
+      });
       result = {
         title: payload.title,
         imageUrl: payload.imageUrl,
         duration: payload.duration,
-        medias: [payload.media]
+        medias: allMedias
       };
+      mediaStates = Array(allMedias.length).fill('idle');
+      mediaProgress = Array(allMedias.length).fill(0);
+      preparedFiles = Array(allMedias.length).fill(null);
+      mediaAbortControllers = Array(allMedias.length).fill(null);
+      shareFailures = Array(allMedias.length).fill(0);
+      mediaNeedsRefresh = Array(allMedias.length).fill(false);
+      showAllOptions = false;
       status = 'success';
-      prepareMediaFiles([payload.media], runId);
+      void prepareOneFile(allMedias[0], 0, runId);
     } catch (cause) {
       if (runId !== preparationId) return;
       status = 'error';
@@ -124,27 +145,92 @@
     }
   }
 
+  function getMediaMimeType(media: Media, responseType: string): string {
+    if (media.mimeType) return media.mimeType;
+    const format = (media.format || '').toLowerCase();
+    if (media.kind === 'audio' || ['mp3', 'm4a', 'aac', 'ogg', 'opus'].includes(format)) {
+      if (format === 'm4a' || format === 'aac') return 'audio/mp4';
+      if (format === 'ogg' || format === 'opus') return 'audio/ogg';
+      return 'audio/mpeg';
+    }
+    if (format === 'webm') return 'video/webm';
+    if (format === 'mov') return 'video/quicktime';
+    if (responseType.startsWith('video/') || responseType.startsWith('audio/')) return responseType;
+    return 'application/octet-stream';
+  }
+
+  function getMediaExtension(media: Media, mimeType = ''): string {
+    const format = (media.format || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (['mp4', 'webm', 'mov', 'mp3', 'm4a', 'aac', 'ogg', 'opus'].includes(format)) return format;
+    if (mimeType === 'video/mp4') return 'mp4';
+    if (mimeType === 'video/webm') return 'webm';
+    if (mimeType === 'audio/mpeg') return 'mp3';
+    if (mimeType === 'audio/mp4') return 'm4a';
+    return media.kind === 'audio' ? 'audio' : 'video';
+  }
+
+  function getMediaProxyUrl(media: Media, inline = false): string {
+    const params = new URLSearchParams({
+      url: media.url,
+      mime: getMediaMimeType(media, 'application/octet-stream'),
+    });
+    if (media.proxyToken) params.set('token', media.proxyToken);
+    if (media.proxyExpires) params.set('expires', String(media.proxyExpires));
+    if (inline) params.set('inline', '1');
+    return `/api/media?${params.toString()}`;
+  }
+
   async function prepareOneFile(media: Media, index: number, runId: number) {
+    if (mediaStates[index] === 'loading') return;
+    mediaAbortControllers[index]?.abort();
+    const controller = new AbortController();
+    const nextControllers = [...mediaAbortControllers];
+    nextControllers[index] = controller;
+    mediaAbortControllers = nextControllers;
+
     try {
-      const proxyUrl = `/api/media?url=${encodeURIComponent(media.url)}`;
-      const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error('Không thể tải tệp video từ máy chủ.');
-      const contentType = response.headers.get('content-type') || 'video/mp4';
-      const totalBytes = Number(response.headers.get('content-length') || 0);
+      const nextStates = [...mediaStates];
+      nextStates[index] = 'loading';
+      mediaStates = nextStates;
+
+      const nextProgressInit = [...mediaProgress];
+      nextProgressInit[index] = 0;
+      mediaProgress = nextProgressInit;
+
+      const proxyUrl = getMediaProxyUrl(media);
+      const response = await fetch(proxyUrl, { signal: controller.signal });
+      if (!response.ok) {
+        if ([403, 404, 410].includes(response.status)) throw new Error('refresh_media');
+        throw new Error('Không thể tải video. Vui lòng thử lại.');
+      }
+      const responseType = response.headers.get('content-type') || 'application/octet-stream';
+      const contentType = getMediaMimeType(media, responseType);
+      const totalBytes = Number(response.headers.get('content-length') || media.fileSize || 0);
       let blob: Blob;
 
-      if (response.body && totalBytes > 0) {
+      if (response.body) {
         const reader = response.body.getReader();
         let receivedBytes = 0;
-        let lastProgress = 0;
+        let lastProgress: number | string = -1;
 
         const monitoredStream = new ReadableStream<Uint8Array>({
           async pull(controller) {
             const { done, value } = await reader.read();
             if (done) { controller.close(); return; }
             receivedBytes += value.byteLength;
-            const progress = Math.min(99, Math.round((receivedBytes / totalBytes) * 100));
-            if (progress >= lastProgress + 2 && runId === preparationId) {
+
+            let progress: number | string;
+            if (totalBytes > 0) {
+              progress = Math.min(99, Math.round((receivedBytes / totalBytes) * 100));
+            } else {
+              progress = `${(receivedBytes / 1_048_576).toFixed(1)} MB`;
+            }
+
+            const shouldUpdate = typeof progress === 'number'
+              ? (typeof lastProgress === 'number' && progress >= lastProgress + 2)
+              : progress !== lastProgress;
+
+            if (shouldUpdate && runId === preparationId) {
               const nextProgress = [...mediaProgress];
               nextProgress[index] = progress;
               mediaProgress = nextProgress;
@@ -160,27 +246,35 @@
       if (runId !== preparationId) return;
 
       const nextFiles = [...preparedFiles];
-      const nextStates = [...mediaStates];
-      nextFiles[index] = new File([blob], `clipsave-${Date.now()}.mp4`, { type: blob.type || 'video/mp4' });
-      nextStates[index] = 'ready';
+      const nextStatesUpdated = [...mediaStates];
+      const normalizedBlob = blob.type === contentType ? blob : new Blob([blob], { type: contentType });
+      nextFiles[index] = new File([normalizedBlob], `clipsave-${Date.now()}.${getMediaExtension(media, contentType)}`, { type: contentType });
+      nextStatesUpdated[index] = 'ready';
       preparedFiles = nextFiles;
-      mediaStates = nextStates;
+      mediaStates = nextStatesUpdated;
       const nextProgress = [...mediaProgress];
       nextProgress[index] = 100;
       mediaProgress = nextProgress;
-    } catch {
+    } catch (cause) {
       if (runId !== preparationId) return;
       const nextStates = [...mediaStates];
-      nextStates[index] = 'error';
+      const aborted = cause instanceof DOMException && cause.name === 'AbortError';
+      nextStates[index] = aborted ? 'idle' : 'error';
       mediaStates = nextStates;
+      if (!aborted) {
+        const nextRefreshStates = [...mediaNeedsRefresh];
+        nextRefreshStates[index] = cause instanceof Error && cause.message === 'refresh_media';
+        mediaNeedsRefresh = nextRefreshStates;
+        error = 'Không thể tải video. Vui lòng thử lại.';
+        status = 'error';
+      }
+    } finally {
+      if (mediaAbortControllers[index] === controller) {
+        const clearedControllers = [...mediaAbortControllers];
+        clearedControllers[index] = null;
+        mediaAbortControllers = clearedControllers;
+      }
     }
-  }
-
-  function prepareMediaFiles(mediaItems: Media[], runId: number) {
-    preparedFiles = Array(mediaItems.length).fill(null);
-    mediaStates = Array(mediaItems.length).fill('loading');
-    mediaProgress = Array(mediaItems.length).fill(0);
-    mediaItems.forEach((media, index) => prepareOneFile(media, index, runId));
   }
 
   function downloadPreparedFile(file: File) {
@@ -192,33 +286,96 @@
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
   }
 
-  async function saveMedia(media: Media, index: number) {
-    if (mediaStates[index] === 'error') {
-      window.open(media.url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    const file = preparedFiles[index];
-    if (!file) return;
-
+  async function triggerDownloadOrShare(file: File, index: number) {
     savingIndex = index;
     error = '';
+    if (result) status = 'success';
     try {
-      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-        // Call share before any await so Safari still sees the user's tap.
-        await navigator.share({ files: [file], title: result?.title || 'Video' });
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if ((shareFailures[index] ?? 0) >= 2 || !isMobile) {
+        downloadPreparedFile(file);
         return;
+      }
+
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        try {
+          await navigator.share({ files: [file], title: result?.title || 'Video' });
+          const resetFailures = [...shareFailures];
+          resetFailures[index] = 0;
+          shareFailures = resetFailures;
+          return;
+        } catch (shareError) {
+          if (shareError instanceof DOMException && shareError.name === 'AbortError') {
+            return;
+          }
+          const nextFailures = [...shareFailures];
+          nextFailures[index] = (nextFailures[index] ?? 0) + 1;
+          shareFailures = nextFailures;
+          error = 'Không thể tải video. Vui lòng thử lại.';
+          status = 'error';
+          return;
+        }
       }
       downloadPreparedFile(file);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      error = cause instanceof Error
-        ? `${cause.message}. Hãy chạm lại nút Tải & lưu.`
-        : 'Safari chưa thể mở bảng Chia sẻ. Hãy chạm lại nút Tải & lưu.';
+      error = 'Không thể tải video. Vui lòng thử lại.';
       status = 'error';
     } finally {
       savingIndex = null;
     }
+  }
+
+  async function saveMedia(media: Media, index: number) {
+    if (mediaStates[index] === 'error') {
+      if (mediaNeedsRefresh[index]) {
+        await analyse();
+        return;
+      }
+      const nextStates = [...mediaStates];
+      nextStates[index] = 'idle';
+      mediaStates = nextStates;
+      await prepareOneFile(media, index, preparationId);
+      return;
+    }
+
+    const file = preparedFiles[index];
+    if (file) {
+      await triggerDownloadOrShare(file, index);
+      return;
+    }
+
+    if (mediaStates[index] === 'idle') {
+      await prepareOneFile(media, index, preparationId);
+    }
+  }
+
+  function getQualityBadge(media: Media): { text: string; class: string } {
+    const label = (media.label || '').toUpperCase();
+    const fmt = (media.format || '').toUpperCase();
+    const allText = `${label} ${fmt}`;
+
+    if (allText.includes('2160') || allText.includes('4K')) {
+      return { text: '4K', class: 'badge-4k' };
+    }
+    if (allText.includes('1440') || allText.includes('2K')) {
+      return { text: '2K', class: 'badge-2k' };
+    }
+    if (allText.includes('1080') || allText.includes('720') || allText.includes('HD')) {
+      return { text: 'HD', class: 'badge-hd' };
+    }
+    if (
+      allText.includes('MP3') ||
+      allText.includes('AAC') ||
+      allText.includes('M4A') ||
+      allText.includes('OPUS') ||
+      allText.includes('OGG') ||
+      allText.includes('AUDIO')
+    ) {
+      return { text: 'MP3', class: 'badge-audio' };
+    }
+    return { text: 'SD', class: 'badge-sd' };
   }
 
   $: mediaCount = result?.medias?.length ?? 0;
@@ -251,7 +408,7 @@
     </div>
     {#if pasteHint}<p class="paste-hint">Chạm giữ trong ô rồi chọn <strong>Dán</strong>.</p>{/if}
     <button class="analyse" type="button" on:click={analyse} disabled={status === 'loading'}>
-      {#if status === 'loading'}<span class="mini-loader" aria-hidden="true"></span> Đang phân tích…{:else}Tải video <span aria-hidden="true">→</span>{/if}
+      {#if status === 'loading'}<span class="mini-loader" aria-hidden="true"></span> Đang kiểm tra…{:else}Tải video <span aria-hidden="true">→</span>{/if}
     </button>
   </section>
 
@@ -267,7 +424,7 @@
         <li><span>02</span><div><strong>Xem trước</strong><small>Kiểm tra đúng nội dung</small></div></li>
         <li><span>03</span><div><strong>Lưu vào Album</strong><small>Lưu video vào điện thoại</small></div></li>
       </ol>
-      <p class="platform-note"><span>Hỗ trợ</span> YouTube · TikTok · Instagram · Facebook · Douyin · Bilibili · Kwai</p>
+      <p class="platform-note"><span>Hỗ trợ</span> YouTube · TikTok · Instagram · Facebook · Douyin · Bilibili · Kwai,...</p>
     </section>
   {/if}
 
@@ -296,7 +453,7 @@
         <div class="video-viewer">
           <div class="viewer-head"><strong>Xem trước video</strong><button type="button" on:click={() => (previewingIndex = null)} aria-label="Đóng trình xem">Đóng</button></div>
           <!-- svelte-ignore a11y_media_has_caption -->
-          <video src={bestMedia.url} poster={result.imageUrl || undefined} controls playsinline preload="metadata"></video>
+          <video src={getMediaProxyUrl(bestMedia, true)} poster={result.imageUrl || undefined} controls playsinline preload="metadata"></video>
         </div>
       {/if}
       {#if bestMedia}
@@ -305,10 +462,66 @@
             <div class="row-actions">
               <button class="view" type="button" on:click={() => (previewingIndex = previewingIndex === 0 ? null : 0)}>{previewingIndex === 0 ? 'Đóng video' : 'Xem video'}</button>
               <button class="save" type="button" on:click={() => saveMedia(bestMedia!, 0)} disabled={mediaStates[0] === 'loading' || savingIndex === 0}>
-                {#if mediaStates[0] === 'loading'}<span class="mini-loader" aria-hidden="true"></span> Chuẩn bị {mediaProgress[0] || 0}%{:else if savingIndex === 0}<span class="mini-loader" aria-hidden="true"></span> Đang mở…{:else if mediaStates[0] === 'error'}Mở video <span aria-hidden="true">↗</span>{:else}Tải & lưu <span aria-hidden="true">↑</span>{/if}
+                {#if mediaStates[0] === 'loading'}
+                  <span class="mini-loader" aria-hidden="true"></span> 
+                  {#if typeof mediaProgress[0] === 'number'}
+                    Đang tải {mediaProgress[0]}%
+                  {:else}
+                    Đang tải {mediaProgress[0] || ''}
+                  {/if}
+                {:else if savingIndex === 0}
+                  <span class="mini-loader" aria-hidden="true"></span> Đang mở…
+                {:else if mediaStates[0] === 'error'}
+                  {mediaNeedsRefresh[0] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span>
+                {:else if mediaStates[0] === 'ready'}
+                  Lưu video <span aria-hidden="true">↑</span>
+                {:else}
+                  Tải & lưu <span aria-hidden="true">↑</span>
+                {/if}
               </button>
             </div>
           </div>
+
+          {#if result.medias && result.medias.length > 1}
+            <div class="options-accordion">
+              <button class="accordion-toggle" type="button" on:click={() => (showAllOptions = !showAllOptions)}>
+                {showAllOptions ? 'Ẩn tùy chọn khác ▲' : 'Định dạng khác... ▼'}
+              </button>
+              {#if showAllOptions}
+                <div class="accordion-content">
+                  {#each result.medias as media, index}
+                    {#if index > 0}
+                      <div class="option-row">
+                        <span class="option-label">
+                          <span class={`quality-badge ${getQualityBadge(media).class}`}>{getQualityBadge(media).text}</span>
+                          <strong>{media.label || media.format || 'Video'}</strong>
+                          {#if media.sizeStr}<span class="size-badge">{media.sizeStr}</span>{/if}
+                        </span>
+                        <button class="save-option" type="button" on:click={() => saveMedia(media, index)} disabled={mediaStates[index] === 'loading' || savingIndex === index}>
+                          {#if mediaStates[index] === 'loading'}
+                            <span class="mini-loader" aria-hidden="true"></span> 
+                            {#if typeof mediaProgress[index] === 'number'}
+                              {mediaProgress[index]}%
+                            {:else}
+                              {mediaProgress[index] || ''}
+                            {/if}
+                          {:else if savingIndex === index}
+                            <span class="mini-loader" aria-hidden="true"></span> Đang mở…
+                          {:else if mediaStates[index] === 'error'}
+                            {mediaNeedsRefresh[index] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span>
+                          {:else if mediaStates[index] === 'ready'}
+                            Lưu <span aria-hidden="true">↑</span>
+                          {:else}
+                            Tải <span aria-hidden="true">↑</span>
+                          {/if}
+                        </button>
+                      </div>
+                    {/if}
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/if}
       <aside class="ios-tip"><span aria-hidden="true">↑</span><p><strong>Trên iPhone:</strong> chạm <em>Tải & lưu</em>, sau đó chọn <em>Lưu video</em> để đưa vào Album trên điện thoại.</p></aside>

@@ -10,14 +10,17 @@
     "dev": "vite",
     "build": "svelte-check && vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "tsx --test tests/**/*.test.ts",
     "preview": "vite preview",
-    "start": "node server.mjs"
+    "start": "tsx server.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "7.2.0",
     "@tsconfig/svelte": "5.0.8",
+    "@types/node": "^24.13.3",
     "svelte": "5.56.4",
     "svelte-check": "4.7.2",
+    "tsx": "4.20.6",
     "typescript": "5.9.3",
     "vite": "8.1.4",
     "vite-plugin-pwa": "1.3.0"

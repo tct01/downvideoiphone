@@ -7,7 +7,7 @@ PWA tối ưu cho iPhone: phân tích liên kết video công khai, xem trước
 - Svelte 5 + TypeScript + Vite
 - `vite-plugin-pwa` và Workbox
 - Vercel Function streaming cho proxy binary video
-- API phân tích mặc định: `https://n8n.tocongtruong.works/webhook/autodownvideo`
+- Provider adapters chuẩn hóa cho Seekin, GenDownload và Snap Video
 
 ## Chạy local
 
@@ -29,13 +29,13 @@ npm run dev
 
 ## Biến môi trường
 
-Sao chép `.env.example` thành `.env.local` nếu cần thay endpoint:
+Sao chép `.env.example` thành `.env.local` và đặt một secret dài, ngẫu nhiên:
 
 ```env
-VITE_API_ENDPOINT=https://n8n.tocongtruong.works/webhook/autodownvideo
+MEDIA_PROXY_SECRET=replace-with-a-long-random-secret
 ```
 
-Đây là URL công khai được đưa vào bundle frontend, không đặt secret trong biến có tiền tố `VITE_`.
+Secret này chỉ chạy phía server, dùng để ký URL proxy trong thời gian ngắn. Không đặt nó trong biến có tiền tố `VITE_`.
 
 ## Đưa lên GitHub
 
@@ -56,14 +56,14 @@ git push -u origin main
 2. Framework Preset: **Vite**.
 3. Build Command: `npm run build`.
 4. Output Directory: `dist`.
-5. Nếu cần endpoint riêng, thêm `VITE_API_ENDPOINT` trong Project Settings → Environment Variables.
+5. Thêm `MEDIA_PROXY_SECRET` trong Project Settings → Environment Variables cho Production, Preview và Development.
 6. Deploy.
 
-`api/media.ts` được Vercel tự nhận diện thành Node.js Function và stream video thay vì buffer toàn bộ response.
+`api/video.ts` thử các provider theo thứ tự, chuẩn hóa mọi response về contract chung và retry lỗi tạm thời. `api/media.ts` xác minh chữ ký rồi stream video thay vì buffer toàn bộ response.
 
 ## Lưu ý vận hành
 
-- Proxy chỉ cho phép HTTPS từ danh sách CDN của các nền tảng được hỗ trợ và kiểm tra lại mọi redirect để hạn chế SSRF.
+- Proxy chỉ nhận URL đã được `/api/video` ký, chữ ký hết hạn sau 15 phút và mọi redirect vẫn được kiểm tra lại.
 - Video không được cache trên server.
 - Vercel phù hợp để thử nghiệm. Nếu lưu lượng tải video lớn, nên chuyển proxy sang dịch vụ media chuyên dụng hoặc object storage/CDN để giảm chi phí và tránh giới hạn thời gian Function.
 - Chỉ sử dụng với nội dung bạn sở hữu hoặc có quyền lưu.

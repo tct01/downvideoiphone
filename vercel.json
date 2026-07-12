@@ -5,7 +5,6 @@
   "outputDirectory": "dist",
   "functions": {
     "api/media.ts": { "maxDuration": 300 },
-    "api/extract.ts": { "maxDuration": 30 },
     "api/video.ts": { "maxDuration": 60 }
   },
   "headers": [
