@@ -34,6 +34,7 @@ const SNAP_HEADERS = {
   Accept: 'application/json',
   Origin: 'https://snap-video.com',
   Referer: 'https://snap-video.com/',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
