@@ -1,6 +1,5 @@
 import { verifyMediaToken } from './_shared/media-token.js';
 import { fetchRemoteMedia, isSafeMediaUrl } from './_shared/remote-media.js';
-import { initProxy } from './_shared/proxy-init.js';
 
 /**
  * /api/media — Vercel Serverless Function
@@ -11,7 +10,6 @@ import { initProxy } from './_shared/proxy-init.js';
 export const maxDuration = 300;
 
 export async function GET(request: Request): Promise<Response> {
-  await initProxy();
   const requestUrl = new URL(request.url);
   const mediaUrl = requestUrl.searchParams.get('url');
   const inline = requestUrl.searchParams.get('inline') === '1';

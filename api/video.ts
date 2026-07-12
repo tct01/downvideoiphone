@@ -19,7 +19,6 @@ import { tryProviders } from './_shared/provider.js';
 import { pickBestMp4 } from './_shared/pick-best.js';
 import { normalizeVideoData } from './_shared/normalize.js';
 import { signMediaUrl } from './_shared/media-token.js';
-import { initProxy } from './_shared/proxy-init.js';
 import type { Provider } from './_shared/provider.js';
 
 /** Danh sách providers theo thứ tự ưu tiên — thêm/bớt ở đây */
@@ -30,7 +29,6 @@ const PROVIDERS: Provider[] = [
 ];
 
 export async function GET(request: Request): Promise<Response> {
-  await initProxy();
   const reqUrl = new URL(request.url);
   const link = reqUrl.searchParams.get('link');
 

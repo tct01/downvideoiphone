@@ -59,11 +59,11 @@ git push -u origin main
 5. Thêm `MEDIA_PROXY_SECRET` trong Project Settings → Environment Variables cho Production, Preview và Development.
 6. Deploy.
 
-`api/video.ts` thử các provider theo thứ tự, chuẩn hóa mọi response về contract chung và retry lỗi tạm thời. `api/media.ts` xác minh chữ ký rồi stream video thay vì buffer toàn bộ response.
+`api/video.ts` thử từng provider một lần theo thứ tự và chuẩn hóa response về contract chung. `api/media.ts` xác minh chữ ký rồi stream video thay vì buffer toàn bộ response.
 
 ## Lưu ý vận hành
 
-- Proxy chỉ nhận URL đã được `/api/video` ký, chữ ký hết hạn sau 15 phút và mọi redirect vẫn được kiểm tra lại.
+- Proxy chỉ nhận URL đã được `/api/video` ký, chữ ký hết hạn sau một giờ và mọi redirect vẫn được kiểm tra lại.
 - Video không được cache trên server.
 - Vercel phù hợp để thử nghiệm. Nếu lưu lượng tải video lớn, nên chuyển proxy sang dịch vụ media chuyên dụng hoặc object storage/CDN để giảm chi phí và tránh giới hạn thời gian Function.
 - Chỉ sử dụng với nội dung bạn sở hữu hoặc có quyền lưu.
