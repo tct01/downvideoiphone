@@ -1,5 +1,9 @@
 export const maxDuration = 60;
 
+// Vercel Edge Runtime cung cấp process.env lúc chạy —
+// khai báo kiểu thủ công để svelte-check không báo lỗi
+declare const process: { env: Record<string, string | undefined> };
+
 // Đọc endpoint từ biến môi trường, không bao giờ trả về client
 const PRIMARY_ENDPOINT =
   process.env.VITE_API_ENDPOINT ||
