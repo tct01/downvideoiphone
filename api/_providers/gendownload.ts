@@ -30,9 +30,6 @@ export const gendownloadProvider: Provider = {
   timeoutMs: 25_000,
 
   async fetch(link: string): Promise<VideoData> {
-    const isYouTube = link.includes('youtube.com') || link.includes('youtu.be');
-    if (isYouTube) throw new Error('no_media');
-
     const response = await fetch('https://gendownload.com/api/extract', {
       method: 'POST',
       headers: {

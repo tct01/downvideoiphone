@@ -25,9 +25,6 @@ export const seekinProvider: Provider = {
   timeoutMs: 15_000,
 
   async fetch(link: string): Promise<VideoData> {
-    const isYouTube = link.includes('youtube.com') || link.includes('youtu.be');
-    if (isYouTube) throw new Error('no_media');
-
     const timestamp = Date.now().toString();
     const lang = 'en';
     const signature = generateSignature(link, timestamp, lang);
