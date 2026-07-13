@@ -385,10 +385,7 @@
     return { text: 'SD', class: 'badge-sd' };
   }
 
-  function getNumericProgress(index: number): number | null {
-    const value = mediaProgress[index];
-    return typeof value === 'number' ? Math.max(0, Math.min(100, value)) : null;
-  }
+  $: numProgress = mediaProgress.map((v) => (typeof v === 'number' ? Math.max(0, Math.min(100, v)) : null));
 
   $: mediaCount = result?.medias?.length ?? 0;
   $: bestMedia = result?.medias?.[0] ?? null;
@@ -474,15 +471,15 @@
               <button class="save" type="button" on:click={() => saveMedia(bestMedia!, 0)} disabled={mediaStates[0] === 'loading' || savingIndex === 0}>
                 {#if mediaStates[0] === 'loading'}
                   <span
-                    class:indeterminate={getNumericProgress(0) === null}
+                    class:indeterminate={numProgress[0] === null}
                     class="download-progress"
-                    style={`--progress-ratio: ${(getNumericProgress(0) ?? 0) / 100}`}
+                    style={`--progress-ratio: ${(numProgress[0] ?? 0) / 100}`}
                     aria-hidden="true"
                   ></span>
                   <span class="download-button-content">
                     <span class="mini-loader" aria-hidden="true"></span>
-                    {#if getNumericProgress(0) !== null}
-                      Đang tải {getNumericProgress(0)}%
+                    {#if numProgress[0] !== null}
+                      Đang tải {numProgress[0]}%
                     {:else}
                       {mediaProgress[0] || 'Đang tải…'}
                     {/if}
@@ -518,15 +515,15 @@
                         <button class="save-option" type="button" on:click={() => saveMedia(media, index)} disabled={mediaStates[index] === 'loading' || savingIndex === index}>
                           {#if mediaStates[index] === 'loading'}
                             <span
-                              class:indeterminate={getNumericProgress(index) === null}
+                              class:indeterminate={numProgress[index] === null}
                               class="download-progress"
-                              style={`--progress-ratio: ${(getNumericProgress(index) ?? 0) / 100}`}
+                              style={`--progress-ratio: ${(numProgress[index] ?? 0) / 100}`}
                               aria-hidden="true"
                             ></span>
                             <span class="download-button-content">
                               <span class="mini-loader" aria-hidden="true"></span>
-                              {#if getNumericProgress(index) !== null}
-                                {getNumericProgress(index)}%
+                              {#if numProgress[index] !== null}
+                                {numProgress[index]}%
                               {:else}
                                 {mediaProgress[index] || 'Đang tải…'}
                               {/if}
