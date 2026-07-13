@@ -33,9 +33,10 @@ Sao chép `.env.example` thành `.env.local` và đặt một secret dài, ngẫ
 
 ```env
 MEDIA_PROXY_SECRET=replace-with-a-long-random-secret
+CLIENT_SIGNATURE_KEY=replace-with-a-separate-client-signature-key
 ```
 
-Secret này chỉ chạy phía server, dùng để ký URL proxy trong thời gian ngắn. Không đặt nó trong biến có tiền tố `VITE_`.
+`MEDIA_PROXY_SECRET` chỉ chạy phía server, dùng để ký URL proxy trong thời gian ngắn. `CLIENT_SIGNATURE_KEY` được nhúng vào frontend để hạn chế người dùng thông thường gọi trực tiếp `/api/video`; nó không thay thế cơ chế bảo mật phía server. Không đặt hai biến này trong biến có tiền tố `VITE_`.
 
 ## Đưa lên GitHub
 
@@ -56,7 +57,7 @@ git push -u origin main
 2. Framework Preset: **Vite**.
 3. Build Command: `npm run build`.
 4. Output Directory: `dist`.
-5. Thêm `MEDIA_PROXY_SECRET` trong Project Settings → Environment Variables cho Production, Preview và Development.
+5. Thêm `MEDIA_PROXY_SECRET` và `CLIENT_SIGNATURE_KEY` (hai giá trị khác nhau) trong Project Settings → Environment Variables cho Production, Preview và Development.
 6. Deploy.
 
 `api/video.ts` thử từng provider một lần theo thứ tự và chuẩn hóa response về contract chung. `api/media.ts` xác minh chữ ký rồi stream video thay vì buffer toàn bộ response.

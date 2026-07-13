@@ -1,5 +1,6 @@
 <script lang="ts">
   import { getBlobMediaMimeType, getMediaExtension, getMediaMimeType } from './lib/media-file';
+  import { createClientSignatureHeaders } from './lib/client-signature';
 
   type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null; kind?: 'video' | 'audio'; mimeType?: string | null; quality?: number | null; hasAudio?: boolean | null; proxyToken?: string; proxyExpires?: number };
   type VideoResult = { title?: string | null; imageUrl?: string | null; duration?: string | null; media: Media; medias?: Media[] };
@@ -102,9 +103,11 @@
 
     try {
       const reqUrl = new URL('/api/video', window.location.origin);
-      reqUrl.searchParams.set('link', link.trim());
+      const normalizedLink = link.trim();
+      reqUrl.searchParams.set('link', normalizedLink);
+      const signatureHeaders = await createClientSignatureHeaders(normalizedLink);
       const response = await fetch(reqUrl.toString(), {
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/json', ...signatureHeaders },
         signal: AbortSignal.timeout(40_000)
       });
 
@@ -553,5 +556,5 @@
     </section>
   {/if}
 
-  <footer><span>ClipSave</span><span>•</span><span> TCT ©2026</span></footer>
+  <footer><span>ClipSave</span><span>•</span><span>TCT</span><span>•</span><span>©2026</span></footer>
 </main>

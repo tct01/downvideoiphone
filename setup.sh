@@ -107,23 +107,34 @@ fi
 
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 
-if [[ ! -s "${ENV_FILE}" ]]; then
-  umask 077
-  MEDIA_PROXY_SECRET="$(openssl rand -hex 32)"
-  printf 'MEDIA_PROXY_SECRET=%s\n' "${MEDIA_PROXY_SECRET}" > "${ENV_FILE}"
+umask 077
+touch "${ENV_FILE}"
+if ! grep -q '^MEDIA_PROXY_SECRET=' "${ENV_FILE}"; then
+  printf 'MEDIA_PROXY_SECRET=%s\n' "$(openssl rand -hex 32)" >> "${ENV_FILE}"
+fi
+if ! grep -q '^CLIENT_SIGNATURE_KEY=' "${ENV_FILE}"; then
+  printf 'CLIENT_SIGNATURE_KEY=%s\n' "$(openssl rand -hex 24)" >> "${ENV_FILE}"
 fi
 chown root:root "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 
+MEDIA_PROXY_SECRET="$(sed -n 's/^MEDIA_PROXY_SECRET=//p' "${ENV_FILE}" | head -n 1)"
+CLIENT_SIGNATURE_KEY="$(sed -n 's/^CLIENT_SIGNATURE_KEY=//p' "${ENV_FILE}" | head -n 1)"
+if [[ -z "${MEDIA_PROXY_SECRET}" || -z "${CLIENT_SIGNATURE_KEY}" ]]; then
+  fail "Không thể khởi tạo secret trong ${ENV_FILE}."
+fi
+
 info "Cài dependency và build production"
 runuser -u "${APP_USER}" -- env HOME="${APP_DIR}" npm --prefix "${APP_DIR}" ci
-runuser -u "${APP_USER}" -- env HOME="${APP_DIR}" npm --prefix "${APP_DIR}" run build
+runuser -u "${APP_USER}" -- env \
+  HOME="${APP_DIR}" \
+  CLIENT_SIGNATURE_KEY="${CLIENT_SIGNATURE_KEY}" \
+  npm --prefix "${APP_DIR}" run build
 
 NPM_BIN="$(command -v npm)"
 info "Cài đặt và khởi động ứng dụng bằng PM2"
 npm install --global pm2
 PM2_BIN="$(command -v pm2)"
-MEDIA_PROXY_SECRET="$(sed -n 's/^MEDIA_PROXY_SECRET=//p' "${ENV_FILE}" | head -n 1)"
 
 # Dọn service systemd cũ nếu VPS từng chạy phiên bản setup trước.
 if [[ -f "/etc/systemd/system/${APP_NAME}.service" ]]; then
@@ -138,6 +149,7 @@ if runuser -u "${APP_USER}" -- env HOME="${APP_DIR}" "${PM2_BIN}" describe "${AP
     NODE_ENV=production \
     PORT="${APP_PORT}" \
     MEDIA_PROXY_SECRET="${MEDIA_PROXY_SECRET}" \
+    CLIENT_SIGNATURE_KEY="${CLIENT_SIGNATURE_KEY}" \
     "${PM2_BIN}" restart "${APP_NAME}" --update-env
 else
   runuser -u "${APP_USER}" -- env \
@@ -145,6 +157,7 @@ else
     NODE_ENV=production \
     PORT="${APP_PORT}" \
     MEDIA_PROXY_SECRET="${MEDIA_PROXY_SECRET}" \
+    CLIENT_SIGNATURE_KEY="${CLIENT_SIGNATURE_KEY}" \
     "${PM2_BIN}" start "${NPM_BIN}" \
       --name "${APP_NAME}" \
       --cwd "${APP_DIR}" \

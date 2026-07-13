@@ -3,8 +3,15 @@ import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { loadEnv } from 'vite';
 import { GET as getVideo } from './api/video.ts';
 import { GET as getMedia } from './api/media.ts';
+
+const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+const fileEnv = loadEnv(mode, process.cwd(), '');
+for (const [name, value] of Object.entries(fileEnv)) {
+  if (process.env[name] === undefined) process.env[name] = value;
+}
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), 'dist');
 const port = Number(process.env.PORT || 5173);
