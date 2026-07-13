@@ -30,11 +30,26 @@ test('keeps googlevideo media returned by Seekin', async (t) => {
     format: 'mp4',
     fileSize: 10_097_787,
     sizeStr: '9.63 MB',
-    kind: undefined,
-    mimeType: null,
+    kind: 'video',
+    mimeType: 'video/mp4',
   });
   assert.equal(result.medias[1].label, 'Audio · M4A');
   assert.equal(result.medias[1].format, 'm4a');
   assert.equal(result.medias[1].kind, 'audio');
   assert.equal(result.medias[1].sizeStr, '525.64 KB');
+});
+
+test('defaults a Douyin video without an extension to MP4', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => Response.json({
+    code: '0000',
+    data: {
+      title: 'Douyin video',
+      medias: [{ url: 'https://v3-dy.example.com/video/tos/cn/tos-cn-ve-15/oABC', label: 'HD' }],
+    },
+  }));
+
+  const result = await seekinProvider.fetch('https://v.douyin.com/example');
+  assert.equal(result.medias[0]?.kind, 'video');
+  assert.equal(result.medias[0]?.format, 'mp4');
+  assert.equal(result.medias[0]?.mimeType, 'video/mp4');
 });

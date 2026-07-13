@@ -30,17 +30,28 @@ export async function GET(request: Request): Promise<Response> {
       return Response.json({ error: 'Không thể tải video. Vui lòng thử lại.' }, { status: upstream.status || 502 });
     }
 
-    const upstreamType = upstream.headers.get('content-type') || 'application/octet-stream';
+    const upstreamType = (upstream.headers.get('content-type') || 'application/octet-stream').split(';', 1)[0].trim().toLowerCase();
     const safeRequestedMime = requestedMime && /^(video|audio)\/[a-z0-9.+-]+$/i.test(requestedMime) ? requestedMime.toLowerCase() : null;
-    const contentType = upstreamType.startsWith('application/octet-stream') && safeRequestedMime ? safeRequestedMime : upstreamType;
+    const genericUpstreamTypes = new Set(['application/octet-stream', 'binary/octet-stream', 'application/binary', 'application/download']);
+    const contentType = genericUpstreamTypes.has(upstreamType) && safeRequestedMime ? safeRequestedMime : upstreamType;
     if (!contentType.startsWith('video/') && !contentType.startsWith('audio/') && !contentType.startsWith('application/octet-stream')) {
       await upstream.body.cancel();
       return Response.json({ error: 'Không thể tải video. Vui lòng thử lại.' }, { status: 502 });
     }
 
+    const extensionByMime: Record<string, string> = {
+      'video/mp4': 'mp4',
+      'video/webm': 'webm',
+      'video/quicktime': 'mov',
+      'audio/mpeg': 'mp3',
+      'audio/mp4': 'm4a',
+      'audio/webm': 'webm',
+      'audio/ogg': 'ogg',
+    };
+    const downloadExtension = extensionByMime[contentType] ?? (contentType.startsWith('audio/') ? 'audio' : 'video');
     const headers = new Headers({
       'Content-Type': contentType,
-      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="clipsave-media.${contentType.startsWith('audio/') ? 'mp3' : 'mp4'}"`,
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="clipsave-media.${downloadExtension}"`,
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff'
     });

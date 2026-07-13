@@ -14,7 +14,7 @@ export default defineConfig({
       manifest: {
         name: 'ClipSave',
         short_name: 'ClipSave',
-        description: 'Chuẩn bị video từ liên kết công khai để lưu trên iPhone.',
+        description: 'Tải và lưu video từ TikTok, YouTube, Facebook, Instagram, Douyin cùng nhiều nền tảng.',
         theme_color: '#f8f7f1',
         background_color: '#f8f7f1',
         display: 'standalone',

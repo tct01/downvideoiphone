@@ -46,6 +46,27 @@ function inferMimeType(kind: 'video' | 'audio', format: string): string {
   return 'application/octet-stream';
 }
 
+function formatFromMimeType(mimeType: string): string {
+  const mime = mimeType.split(';', 1)[0].trim().toLowerCase();
+  const formats: Record<string, string> = {
+    'audio/aac': 'aac',
+    'audio/flac': 'flac',
+    'audio/mpeg': 'mp3',
+    'audio/mp4': 'm4a',
+    'audio/ogg': 'ogg',
+    'audio/opus': 'opus',
+    'audio/wav': 'wav',
+    'audio/webm': 'webm',
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
+    'video/x-matroska': 'mkv',
+    'video/x-msvideo': 'avi',
+    'video/mp2t': 'ts',
+  };
+  return formats[mime] ?? '';
+}
+
 export function normalizeMedia(media: Media): NormalizedMedia | null {
   const rawUrl = media.url?.trim();
   if (!rawUrl) return null;
@@ -70,8 +91,8 @@ export function normalizeMedia(media: Media): NormalizedMedia | null {
   const kind: 'video' | 'audio' = media.kind
     ?? (mime.startsWith('audio/') || /\b(audio|sound|mp3|m4a|aac|opus|ogg|wav|flac)\b/.test(`${rawFormat} ${label}`) ? 'audio' : 'video');
 
-  const formatFromText = KNOWN_FORMATS.find((candidate) => new RegExp(`(^|[^a-z0-9])${candidate}([^a-z0-9]|$)`, 'i').test(rawFormat));
-  const formatFromMime = KNOWN_FORMATS.find((candidate) => mime.includes(candidate));
+  const formatFromText = KNOWN_FORMATS.find((candidate) => new RegExp(`(^|[^a-z0-9])${candidate}([^a-z0-9]|$)`, 'i').test(`${rawFormat} ${label}`));
+  const formatFromMime = formatFromMimeType(mime);
   const format = formatFromText || (KNOWN_FORMATS.includes(urlExtension) ? urlExtension : '') || formatFromMime || 'unknown';
 
   const hasAudio = kind === 'audio'
@@ -88,7 +109,7 @@ export function normalizeMedia(media: Media): NormalizedMedia | null {
     fileSize: Number.isFinite(media.fileSize) && Number(media.fileSize) > 0 ? Number(media.fileSize) : null,
     sizeStr: media.sizeStr?.trim() || null,
     kind,
-    mimeType: media.mimeType?.trim() || inferMimeType(kind, format),
+    mimeType: mime.startsWith('video/') || mime.startsWith('audio/') ? mime : inferMimeType(kind, format),
     quality: media.quality && media.quality > 0 ? media.quality : qualityFromText(descriptor),
     hasAudio,
   };

@@ -155,11 +155,13 @@ export const snapVideoProvider: Provider = {
     const media: Media = {
       url: downloadUrl,
       label: best.label || best.resolution || 'HD',
-      format: best.ext || 'mp4',
+      format: (best.ext ?? '').toLowerCase().includes('webm') ? 'webm' : 'mp4',
       fileSize: best.size_bytes || null,
       sizeStr: best.size_bytes
         ? `${(best.size_bytes / 1_048_576).toFixed(1)} MB`
         : null,
+      kind: 'video',
+      mimeType: (best.ext ?? '').toLowerCase().includes('webm') ? 'video/webm' : 'video/mp4',
     };
 
     return {

@@ -51,17 +51,26 @@ export const gendownloadProvider: Provider = {
     }
 
     // Map từ schema GenDownload → schema chung Media[]
-    const medias: Media[] = gd.formats
-      .filter((f) => !f.url.includes('googlevideo.com'))
-      .map((f) => ({
+    const medias: Media[] = gd.formats.map((f) => {
+      const kind: 'video' | 'audio' = (f.type ?? '').toLowerCase().startsWith('audio') ? 'audio' : 'video';
+      const rawExtension = (f.ext ?? '').trim().toLowerCase().replace(/^\./, '');
+      const format = rawExtension || (kind === 'audio' ? 'm4a' : 'mp4');
+      const mimeType = kind === 'audio'
+        ? (format === 'm4a' || format === 'aac' ? 'audio/mp4' : format === 'ogg' || format === 'opus' ? 'audio/ogg' : 'audio/mpeg')
+        : (format === 'webm' ? 'video/webm' : format === 'mov' ? 'video/quicktime' : 'video/mp4');
+
+      return {
         url: f.url,
         label: f.label ?? null,
-        format: f.type === 'audio' ? (f.ext ?? 'audio') : (f.ext ?? 'mp4'),
+        format,
         fileSize: f.filesize ?? null,
         sizeStr: f.filesize
           ? `${(f.filesize / 1_048_576).toFixed(1)} MB`
           : null,
-      }));
+        kind,
+        mimeType,
+      };
+    });
 
     if (medias.length === 0) {
       throw new Error('no_media');

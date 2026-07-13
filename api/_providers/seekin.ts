@@ -14,6 +14,48 @@ import type { Media, VideoData } from '../_shared/types.js';
 
 const SECRET_KEY = '3HT8hjE79L';
 const AUDIO_EXTENSIONS = new Set(['aac', 'flac', 'm4a', 'mp3', 'ogg', 'opus', 'wav', 'weba']);
+const VIDEO_EXTENSIONS = new Set(['avi', 'm4v', 'mkv', 'mov', 'mp4', 'ts', 'webm']);
+const KNOWN_EXTENSIONS = new Set([...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS]);
+
+function extensionFromMime(mimeType?: string | null): string | null {
+  const mime = (mimeType ?? '').split(';', 1)[0].trim().toLowerCase();
+  const byMime: Record<string, string> = {
+    'audio/aac': 'aac',
+    'audio/flac': 'flac',
+    'audio/mpeg': 'mp3',
+    'audio/mp4': 'm4a',
+    'audio/ogg': 'ogg',
+    'audio/webm': 'weba',
+    'audio/wav': 'wav',
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'video/webm': 'webm',
+  };
+  return byMime[mime] ?? null;
+}
+
+function extensionFromUrl(value: string): string | null {
+  try {
+    const extension = new URL(value).pathname.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] ?? '';
+    return KNOWN_EXTENSIONS.has(extension) ? extension : null;
+  } catch {
+    return null;
+  }
+}
+
+function mimeFromExtension(extension: string, kind: 'video' | 'audio'): string {
+  if (kind === 'audio') {
+    if (extension === 'm4a' || extension === 'aac') return 'audio/mp4';
+    if (extension === 'ogg' || extension === 'opus') return 'audio/ogg';
+    if (extension === 'weba' || extension === 'webm') return 'audio/webm';
+    if (extension === 'wav') return 'audio/wav';
+    if (extension === 'flac') return 'audio/flac';
+    return 'audio/mpeg';
+  }
+  if (extension === 'webm') return 'video/webm';
+  if (extension === 'mov') return 'video/quicktime';
+  return 'video/mp4';
+}
 
 function parseFileSize(size: string): number | null {
   const match = size.match(/([\d.]+)\s*(B|KB|MB|GB)/i);
@@ -25,12 +67,28 @@ function parseFileSize(size: string): number | null {
 
 function normalizeSeekinMedia(media: Media): Media {
   const descriptor = media.format?.trim() ?? '';
-  const extension = descriptor.match(/\[\s*\.?([a-z0-9]+)\s*\]/i)?.[1]?.toLowerCase();
+  const bracketExtension = descriptor.match(/\[\s*\.?([a-z0-9]+)\s*\]/i)?.[1]?.toLowerCase();
+  const plainExtension = [...KNOWN_EXTENSIONS].find((candidate) => new RegExp(`(^|[^a-z0-9])${candidate}([^a-z0-9]|$)`, 'i').test(descriptor));
+  const detectedExtension = (bracketExtension && KNOWN_EXTENSIONS.has(bracketExtension) ? bracketExtension : null)
+    || plainExtension
+    || extensionFromMime(media.mimeType)
+    || extensionFromUrl(media.url);
   const sizeStr = descriptor.match(/[\[(]\s*([\d.]+\s*(?:B|KB|MB|GB))\s*[\])]/i)?.[1]?.toUpperCase();
   const qualityLabel = descriptor.match(/\b(4K|2K|\d{3,4}p|FHD|HD|SD)\b/i)?.[1];
-  const isAudio = extension ? AUDIO_EXTENSIONS.has(extension) : media.kind === 'audio';
+  const isAudio = media.kind === 'audio'
+    || (media.mimeType ?? '').toLowerCase().startsWith('audio/')
+    || Boolean(detectedExtension && AUDIO_EXTENSIONS.has(detectedExtension))
+    || /\b(audio|sound)\b/i.test(`${descriptor} ${media.label ?? ''}`);
+  const kind: 'video' | 'audio' = isAudio ? 'audio' : 'video';
+  // Seekin documents Douyin downloads as MP4. Some Douyin responses omit [.mp4],
+  // so an otherwise unknown video must not leak out as application/octet-stream.
+  const extension = detectedExtension || (isAudio ? 'mp3' : 'mp4');
   const format = extension === 'weba' ? 'webm' : extension;
   const displayFormat = format?.toUpperCase();
+  const declaredMime = (media.mimeType ?? '').split(';', 1)[0].trim().toLowerCase();
+  const mimeType = declaredMime.startsWith('video/') || declaredMime.startsWith('audio/')
+    ? declaredMime
+    : mimeFromExtension(extension, kind);
 
   return {
     ...media,
@@ -40,8 +98,8 @@ function normalizeSeekinMedia(media: Media): Media {
     format: format || media.format,
     fileSize: media.fileSize ?? (sizeStr ? parseFileSize(sizeStr) : null),
     sizeStr: media.sizeStr?.trim() || sizeStr || null,
-    kind: isAudio ? 'audio' : media.kind,
-    mimeType: media.mimeType || (extension === 'weba' ? 'audio/webm' : null),
+    kind,
+    mimeType,
   };
 }
 

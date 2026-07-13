@@ -26,6 +26,16 @@ test('uses safe defaults when provider omits format and MIME', () => {
   assert.equal(normalized.medias[0]?.quality, 720);
 });
 
+test('does not preserve a generic MIME when the format identifies an MP4 video', () => {
+  const normalized = normalizeVideoData({ medias: [{
+    url: 'https://cdn.example/download/123',
+    format: 'MP4',
+    mimeType: 'application/octet-stream',
+  }] });
+  assert.equal(normalized.medias[0]?.format, 'mp4');
+  assert.equal(normalized.medias[0]?.mimeType, 'video/mp4');
+});
+
 test('deduplicates identical provider URLs', () => {
   const normalized = normalizeVideoData({ medias: [
     { url: 'https://cdn.example/video.mp4', format: 'mp4' },

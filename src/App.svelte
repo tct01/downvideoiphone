@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { getBlobMediaMimeType, getMediaExtension, getMediaMimeType } from './lib/media-file';
+
   type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null; kind?: 'video' | 'audio'; mimeType?: string | null; quality?: number | null; hasAudio?: boolean | null; proxyToken?: string; proxyExpires?: number };
   type VideoResult = { title?: string | null; imageUrl?: string | null; duration?: string | null; media: Media; medias?: Media[] };
 
@@ -145,30 +147,6 @@
     }
   }
 
-  function getMediaMimeType(media: Media, responseType: string): string {
-    if (media.mimeType) return media.mimeType;
-    const format = (media.format || '').toLowerCase();
-    if (media.kind === 'audio' || ['mp3', 'm4a', 'aac', 'ogg', 'opus'].includes(format)) {
-      if (format === 'm4a' || format === 'aac') return 'audio/mp4';
-      if (format === 'ogg' || format === 'opus') return 'audio/ogg';
-      return 'audio/mpeg';
-    }
-    if (format === 'webm') return 'video/webm';
-    if (format === 'mov') return 'video/quicktime';
-    if (responseType.startsWith('video/') || responseType.startsWith('audio/')) return responseType;
-    return 'application/octet-stream';
-  }
-
-  function getMediaExtension(media: Media, mimeType = ''): string {
-    const format = (media.format || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (['mp4', 'webm', 'mov', 'mp3', 'm4a', 'aac', 'ogg', 'opus'].includes(format)) return format;
-    if (mimeType === 'video/mp4') return 'mp4';
-    if (mimeType === 'video/webm') return 'webm';
-    if (mimeType === 'audio/mpeg') return 'mp3';
-    if (mimeType === 'audio/mp4') return 'm4a';
-    return media.kind === 'audio' ? 'audio' : 'video';
-  }
-
   function getMediaProxyUrl(media: Media, inline = false): string {
     const params = new URLSearchParams({
       url: media.url,
@@ -223,7 +201,7 @@
         throw new Error('Không thể tải video. Vui lòng thử lại.');
       }
       const responseType = response.headers.get('content-type') || 'application/octet-stream';
-      const contentType = getMediaMimeType(media, responseType);
+      const declaredContentType = getMediaMimeType(media, responseType);
       const responseSize = Number(response.headers.get('content-length'));
       const declaredSize = Number(media.fileSize);
       const totalBytes = Number.isFinite(responseSize) && responseSize > 0
@@ -264,12 +242,13 @@
           }
         }
 
-        blob = new Blob(chunks, { type: contentType });
+        blob = new Blob(chunks, { type: declaredContentType });
       } else {
         blob = await response.blob();
       }
       if (runId !== preparationId) return;
 
+      const contentType = await getBlobMediaMimeType(blob, media, responseType);
       const nextFiles = [...preparedFiles];
       const normalizedBlob = blob.type === contentType ? blob : new Blob([blob], { type: contentType });
       nextFiles[index] = new File([normalizedBlob], `clipsave-${Date.now()}.${getMediaExtension(media, contentType)}`, { type: contentType });
@@ -423,10 +402,6 @@
   $: bestMedia = result?.medias?.[0] ?? null;
 </script>
 
-<svelte:head>
-  <meta name="description" content="Chuẩn bị video từ liên kết công khai để lưu trên iPhone." />
-</svelte:head>
-
 <main>
   <header class="masthead">
     <a class="brand" href="/" aria-label="ClipSave, về trang chủ">
@@ -443,7 +418,9 @@
   <section class="composer" aria-label="Phân tích liên kết video">
     <label for="video-link">Liên kết video</label>
     <div class="input-wrap" class:input-error={status === 'error' && !result}>
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 13.4a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66l-1.62 1.62m2.1 4.06a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 1 0 5.66 5.66l1.61-1.61" /></svg>
+      {#if !link.trim()}
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 13.4a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66l-1.62 1.62m2.1 4.06a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 1 0 5.66 5.66l1.61-1.61" /></svg>
+      {/if}
       <input id="video-link" bind:this={linkInput} bind:value={link} on:input={() => (pasteHint = false)} on:keydown={(event) => event.key === 'Enter' && analyse()} placeholder="Dán link video vào đây…" inputmode="url" autocomplete="url" />
       <button class="paste" type="button" on:click={pasteLink}>Dán</button>
     </div>
@@ -457,15 +434,15 @@
     <section class="product-story" aria-labelledby="story-title">
       <div class="story-lead">
         <p class="eyebrow">TIỆN ÍCH TẢI VIDEO</p>
-        <h2 id="story-title">Tải nhanh. Chất lượng cao.</h2>
-        <p>Dán liên kết để tải xuống ngay video và âm thanh với chất lượng cao, nhanh chóng và dễ sử dụng.</p>
+        <h1 id="story-title">Tải video trực tuyến nhanh, chất lượng cao</h1>
+        <p>Dán liên kết để tải video TikTok, YouTube, Instagram, Facebook, Douyin và nhiều nền tảng. Chọn chất lượng phù hợp, xem trước rồi lưu trên điện thoại hoặc máy tính.</p>
       </div>
       <ol class="story-steps">
         <li><span>01</span><div><strong>Dán liên kết</strong><small>Từ nền tảng bạn đang xem</small></div></li>
         <li><span>02</span><div><strong>Xem trước</strong><small>Kiểm tra đúng nội dung</small></div></li>
         <li><span>03</span><div><strong>Lưu vào Album</strong><small>Lưu video vào điện thoại</small></div></li>
       </ol>
-      <p class="platform-note"><span>Hỗ trợ</span> YouTube · TikTok · Instagram · Facebook · Douyin · Bilibili · Kwai,...</p>
+      <p class="platform-note"><span>Nền tảng hỗ trợ</span> YouTube · TikTok · Instagram · Facebook · Douyin · Bilibili · Kwai và nhiều nền tảng khác.</p>
     </section>
   {/if}
 
@@ -585,5 +562,5 @@
     </section>
   {/if}
 
-  <footer><span>ClipSave</span><span>•</span><span>TCT ©2026</span></footer>
+  <footer><span>ClipSave</span><span>•</span><span> TCT ©2026</span></footer>
 </main>
