@@ -194,7 +194,7 @@
       mediaStates = nextStates;
 
       const nextProgressInit = [...mediaProgress];
-      nextProgressInit[index] = 0;
+      nextProgressInit[index] = 'Đang kết nối…';
       mediaProgress = nextProgressInit;
 
       const proxyUrl = getMediaProxyUrl(media);
@@ -205,56 +205,61 @@
       }
       const responseType = response.headers.get('content-type') || 'application/octet-stream';
       const contentType = getMediaMimeType(media, responseType);
-      const totalBytes = Number(response.headers.get('content-length') || media.fileSize || 0);
+      const responseSize = Number(response.headers.get('content-length'));
+      const declaredSize = Number(media.fileSize);
+      const totalBytes = Number.isFinite(responseSize) && responseSize > 0
+        ? responseSize
+        : Number.isFinite(declaredSize) && declaredSize > 0
+          ? declaredSize
+          : 0;
       let blob: Blob;
 
       if (response.body) {
         const reader = response.body.getReader();
+        const chunks: ArrayBuffer[] = [];
         let receivedBytes = 0;
-        let lastProgress: number | string = -1;
+        let lastProgress: number | string = 'Đang kết nối…';
 
-        const monitoredStream = new ReadableStream<Uint8Array>({
-          async pull(controller) {
-            const { done, value } = await reader.read();
-            if (done) { controller.close(); return; }
-            receivedBytes += value.byteLength;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value.slice().buffer as ArrayBuffer);
+          receivedBytes += value.byteLength;
 
-            let progress: number | string;
-            if (totalBytes > 0) {
-              progress = Math.min(99, Math.round((receivedBytes / totalBytes) * 100));
-            } else {
-              progress = `${(receivedBytes / 1_048_576).toFixed(1)} MB`;
-            }
+          const progress: number | string = totalBytes > 0
+            ? Math.max(1, Math.min(99, Math.floor((receivedBytes / totalBytes) * 100)))
+            : `${(receivedBytes / 1_048_576).toFixed(1)} MB`;
+          const shouldUpdate = typeof progress === 'number'
+            ? typeof lastProgress !== 'number' || progress >= lastProgress + 2
+            : progress !== lastProgress;
 
-            const shouldUpdate = typeof progress === 'number'
-              ? (typeof lastProgress === 'number' && progress >= lastProgress + 2)
-              : progress !== lastProgress;
-
-            if (shouldUpdate && runId === preparationId) {
-              const nextProgress = [...mediaProgress];
-              nextProgress[index] = progress;
-              mediaProgress = nextProgress;
-              lastProgress = progress;
-            }
-            controller.enqueue(value);
+          if (shouldUpdate && runId === preparationId) {
+            const nextProgress = [...mediaProgress];
+            nextProgress[index] = progress;
+            mediaProgress = nextProgress;
+            lastProgress = progress;
+            await new Promise<void>((resolve) => setTimeout(resolve, 0));
           }
-        });
-        blob = await new Response(monitoredStream, { headers: { 'Content-Type': contentType } }).blob();
+        }
+
+        blob = new Blob(chunks, { type: contentType });
       } else {
         blob = await response.blob();
       }
       if (runId !== preparationId) return;
 
       const nextFiles = [...preparedFiles];
-      const nextStatesUpdated = [...mediaStates];
       const normalizedBlob = blob.type === contentType ? blob : new Blob([blob], { type: contentType });
       nextFiles[index] = new File([normalizedBlob], `clipsave-${Date.now()}.${getMediaExtension(media, contentType)}`, { type: contentType });
-      nextStatesUpdated[index] = 'ready';
       preparedFiles = nextFiles;
-      mediaStates = nextStatesUpdated;
       const nextProgress = [...mediaProgress];
       nextProgress[index] = 100;
       mediaProgress = nextProgress;
+      await new Promise<void>((resolve) => setTimeout(resolve, 180));
+      if (runId !== preparationId) return;
+      const nextStatesUpdated = [...mediaStates];
+      nextStatesUpdated[index] = 'ready';
+      mediaStates = nextStatesUpdated;
     } catch (cause) {
       if (runId !== preparationId) return;
       const nextStates = [...mediaStates];
@@ -477,7 +482,7 @@
                     {#if getNumericProgress(0) !== null}
                       Đang tải {getNumericProgress(0)}%
                     {:else}
-                      Đang tải {mediaProgress[0] || ''}
+                      {mediaProgress[0] || 'Đang kết nối…'}
                     {/if}
                   </span>
                 {:else if savingIndex === 0}
@@ -521,7 +526,7 @@
                               {#if getNumericProgress(index) !== null}
                                 {getNumericProgress(index)}%
                               {:else}
-                                {mediaProgress[index] || ''}
+                                {mediaProgress[index] || 'Đang kết nối…'}
                               {/if}
                             </span>
                           {:else if savingIndex === index}
@@ -547,5 +552,5 @@
     </section>
   {/if}
 
-  <footer><span>ClipSave</span><span>•</span><span>Tô Công Trường ©2026</span></footer>
+  <footer><span>ClipSave</span><span>•</span><span>TCT ©2026</span></footer>
 </main>
