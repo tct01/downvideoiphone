@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://clip-save.vercel.app/sitemap.xml
+Sitemap: https://clipsave.top/sitemap.xml

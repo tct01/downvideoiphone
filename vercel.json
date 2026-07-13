@@ -3,6 +3,20 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://clipsave.top/$1",
+      "permanent": true,
+      "has": [{ "type": "host", "value": "clip-save.vercel.app" }]
+    },
+    {
+      "source": "/(.*)",
+      "destination": "https://clipsave.top/$1",
+      "permanent": true,
+      "has": [{ "type": "host", "value": "www.clipsave.top" }]
+    }
+  ],
   "functions": {
     "api/media.ts": { "maxDuration": 300 },
     "api/video.ts": { "maxDuration": 60 }
