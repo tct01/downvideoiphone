@@ -225,12 +225,11 @@
 
           if (totalBytes > 0) {
             const targetPercent = Math.max(1, Math.min(99, Math.floor((receivedBytes / totalBytes) * 100)));
-            while (displayedPercent < targetPercent && runId === preparationId) {
-              displayedPercent += 1;
+            if (targetPercent > displayedPercent && runId === preparationId) {
+              displayedPercent = targetPercent;
               const nextProgress = [...mediaProgress];
               nextProgress[index] = displayedPercent;
               mediaProgress = nextProgress;
-              await new Promise<void>((resolve) => setTimeout(resolve, 16));
             }
           } else {
             const byteProgress = `${(receivedBytes / 1_048_576).toFixed(1)} MB`;
@@ -253,15 +252,8 @@
       const normalizedBlob = blob.type === contentType ? blob : new Blob([blob], { type: contentType });
       nextFiles[index] = new File([normalizedBlob], `clipsave-${Date.now()}.${getMediaExtension(media, contentType)}`, { type: contentType });
       preparedFiles = nextFiles;
-      if (totalBytes > 0) {
-        while (displayedPercent < 100 && runId === preparationId) {
-          displayedPercent += 1;
-          const nextProgress = [...mediaProgress];
-          nextProgress[index] = displayedPercent;
-          mediaProgress = nextProgress;
-          await new Promise<void>((resolve) => setTimeout(resolve, 16));
-        }
-      } else {
+      {
+        displayedPercent = 100;
         const nextProgress = [...mediaProgress];
         nextProgress[index] = 100;
         mediaProgress = nextProgress;
