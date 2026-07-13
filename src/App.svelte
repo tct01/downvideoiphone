@@ -433,6 +433,8 @@
       </ol>
       <p class="platform-note"><span>Nền tảng hỗ trợ</span> YouTube · TikTok · Instagram · Facebook · Douyin · Bilibili · Kwai và nhiều nền tảng khác.</p>
     </section>
+  {:else}
+    <h1 class="sr-only">Tải video trực tuyến nhanh, chất lượng cao</h1>
   {/if}
 
   {#if status === 'error'}

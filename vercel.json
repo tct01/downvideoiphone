@@ -8,7 +8,7 @@
       "source": "/(.*)",
       "destination": "https://www.clipsave.top/$1",
       "permanent": true,
-      "has": [{ "type": "host", "value": "clip-save.vercel.app" }]
+      "has": [{ "type": "host", "value": "downvideoiphone.vercel.app" }]
     }
   ],
   "functions": {
