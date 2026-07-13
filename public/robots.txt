@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /api/
 
-Sitemap: https://clipsave.top/sitemap.xml
+Sitemap: https://www.clipsave.top/sitemap.xml

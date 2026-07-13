@@ -6,15 +6,9 @@
   "redirects": [
     {
       "source": "/(.*)",
-      "destination": "https://clipsave.top/$1",
+      "destination": "https://www.clipsave.top/$1",
       "permanent": true,
       "has": [{ "type": "host", "value": "clip-save.vercel.app" }]
-    },
-    {
-      "source": "/(.*)",
-      "destination": "https://clipsave.top/$1",
-      "permanent": true,
-      "has": [{ "type": "host", "value": "www.clipsave.top" }]
     }
   ],
   "functions": {
