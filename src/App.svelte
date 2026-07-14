@@ -420,12 +420,12 @@
   </header>
 
   <section class="composer" aria-label="Phân tích liên kết media">
-    <label for="video-link">Liên kết video hoặc bài ảnh</label>
+    <label for="video-link">Liên kết video</label>
     <div class="input-wrap" class:input-error={status === 'error' && !result}>
       {#if !link.trim()}
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 13.4a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66l-1.62 1.62m2.1 4.06a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 1 0 5.66 5.66l1.61-1.61" /></svg>
       {/if}
-      <input id="video-link" bind:this={linkInput} bind:value={link} on:input={() => (pasteHint = false)} on:keydown={(event) => event.key === 'Enter' && analyse()} placeholder="Dán link video hoặc bài ảnh…" inputmode="url" autocomplete="url" />
+      <input id="video-link" bind:this={linkInput} bind:value={link} on:input={() => (pasteHint = false)} on:keydown={(event) => event.key === 'Enter' && analyse()} placeholder="Dán link video vào đây…" inputmode="url" autocomplete="url" />
       <button class="paste" type="button" on:click={pasteLink}>Dán</button>
     </div>
     {#if pasteHint}<p class="paste-hint">Chạm giữ trong ô rồi chọn <strong>Dán</strong>.</p>{/if}
@@ -439,7 +439,7 @@
       <div class="story-lead">
         <p class="eyebrow">TIỆN ÍCH TẢI VIDEO</p>
         <h1 id="story-title">Tải video trực tuyến nhanh, chất lượng cao</h1>
-        <p>Dán liên kết để tải video TikTok, YouTube, Instagram, Facebook, Douyin và cả bài ảnh TikTok. Xem trước rồi lưu trên điện thoại hoặc máy tính.</p>
+        <p>Dán liên kết để tải video TikTok, YouTube, Instagram, Facebook, Douyin,... Xem trước rồi lưu trên điện thoại hoặc máy tính.</p>
       </div>
       <ol class="story-steps">
         <li><span>01</span><div><strong>Dán liên kết</strong><small>Từ nền tảng bạn đang xem</small></div></li>
