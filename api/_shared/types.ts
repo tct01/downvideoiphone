@@ -1,16 +1,16 @@
 /**
- * Kiểu dữ liệu chung cho toàn bộ hệ thống tải video.
+ * Kiểu dữ liệu chung cho toàn bộ hệ thống tải media.
  * Tất cả providers phải chuẩn hóa response về các kiểu này.
  */
 
-/** Một media item (video hoặc audio) đã chuẩn hóa */
+/** Một media item (video, audio hoặc ảnh) đã chuẩn hóa */
 export type Media = {
   url: string;
   label?: string | null;
   format?: string | null;
   fileSize?: number | null;
   sizeStr?: string | null;
-  kind?: 'video' | 'audio';
+  kind?: 'video' | 'audio' | 'image';
   mimeType?: string | null;
   quality?: number | null;
   hasAudio?: boolean | null;
@@ -18,7 +18,7 @@ export type Media = {
   proxyExpires?: number;
 };
 
-/** Dữ liệu video đã chuẩn hóa — output chung của mọi provider */
+/** Dữ liệu media đã chuẩn hóa, output chung của mọi provider. */
 export type VideoData = {
   title?: string;
   imageUrl?: string;
@@ -33,7 +33,7 @@ export type NormalizedMedia = Media & {
   format: string;
   fileSize: number | null;
   sizeStr: string | null;
-  kind: 'video' | 'audio';
+  kind: 'video' | 'audio' | 'image';
   mimeType: string;
   quality: number;
   hasAudio: boolean | null;

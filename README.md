@@ -1,13 +1,13 @@
 # ClipSave
 
-PWA tối ưu cho iPhone: phân tích liên kết video công khai, xem trước và lưu video qua Share Sheet của iOS.
+PWA tối ưu cho iPhone: phân tích liên kết video hoặc bài ảnh TikTok công khai, xem trước và lưu qua Share Sheet của iOS.
 
 ## Công nghệ
 
 - Svelte 5 + TypeScript + Vite
 - `vite-plugin-pwa` và Workbox
-- Vercel Function streaming cho proxy binary video
-- Provider adapters chuẩn hóa cho Seekin, GenDownload và Snap Video
+- Vercel Function streaming cho proxy binary media
+- Provider adapters chuẩn hóa cho Seekin, Snap Video, GenDownload và TikWM
 
 ## Chạy local
 
@@ -60,7 +60,7 @@ git push -u origin main
 5. Thêm `MEDIA_PROXY_SECRET` và `CLIENT_SIGNATURE_KEY` (hai giá trị khác nhau) trong Project Settings → Environment Variables cho Production, Preview và Development.
 6. Deploy.
 
-`api/video.ts` thử từng provider một lần theo thứ tự và chuẩn hóa response về contract chung. `api/media.ts` xác minh chữ ký rồi stream video thay vì buffer toàn bộ response.
+`api/video.ts` thử từng provider một lần theo thứ tự và chuẩn hóa response về contract chung. TikWM hỗ trợ cả video lẫn carousel ảnh TikTok. `api/media.ts` xác minh chữ ký rồi stream media thay vì buffer toàn bộ response.
 
 ## Lưu ý vận hành
 

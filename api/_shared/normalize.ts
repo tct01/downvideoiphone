@@ -2,7 +2,8 @@ import type { Media, NormalizedMedia, NormalizedVideoData, VideoData } from './t
 
 const AUDIO_FORMATS = ['mp3', 'aac', 'm4a', 'opus', 'ogg', 'wav', 'flac'];
 const VIDEO_FORMATS = ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'avi', 'ts'];
-const KNOWN_FORMATS = [...VIDEO_FORMATS, ...AUDIO_FORMATS];
+const IMAGE_FORMATS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif'];
+const KNOWN_FORMATS = [...VIDEO_FORMATS, ...AUDIO_FORMATS, ...IMAGE_FORMATS];
 
 function extensionFromUrl(value: string): string {
   try {
@@ -27,8 +28,17 @@ function qualityFromText(value: string): number {
   return 0;
 }
 
-function inferMimeType(kind: 'video' | 'audio', format: string): string {
+function inferMimeType(kind: 'video' | 'audio' | 'image', format: string): string {
   const normalized = format.toLowerCase();
+  if (kind === 'image') {
+    if (normalized === 'jpg' || normalized === 'jpeg') return 'image/jpeg';
+    if (normalized === 'png') return 'image/png';
+    if (normalized === 'webp') return 'image/webp';
+    if (normalized === 'gif') return 'image/gif';
+    if (normalized === 'heic' || normalized === 'heif') return 'image/heic';
+    if (normalized === 'avif') return 'image/avif';
+    return 'application/octet-stream';
+  }
   if (kind === 'audio') {
     if (normalized === 'mp3') return 'audio/mpeg';
     if (normalized === 'm4a' || normalized === 'aac') return 'audio/mp4';
@@ -57,6 +67,13 @@ function formatFromMimeType(mimeType: string): string {
     'audio/opus': 'opus',
     'audio/wav': 'wav',
     'audio/webm': 'webm',
+    'image/avif': 'avif',
+    'image/gif': 'gif',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
     'video/mp4': 'mp4',
     'video/quicktime': 'mov',
     'video/webm': 'webm',
@@ -88,8 +105,12 @@ export function normalizeMedia(media: Media): NormalizedMedia | null {
   const descriptor = `${rawFormat} ${media.label ?? ''} ${media.mimeType ?? ''} ${urlExtension}`.toLowerCase();
   const mime = (media.mimeType ?? '').toLowerCase();
   const label = (media.label ?? '').toLowerCase();
-  const kind: 'video' | 'audio' = media.kind
-    ?? (mime.startsWith('audio/') || /\b(audio|sound|mp3|m4a|aac|opus|ogg|wav|flac)\b/.test(`${rawFormat} ${label}`) ? 'audio' : 'video');
+  const kind: 'video' | 'audio' | 'image' = media.kind
+    ?? (mime.startsWith('image/') || /\b(image|photo|picture|jpg|jpeg|png|webp|gif|heic|heif|avif|ảnh)\b/.test(`${rawFormat} ${label}`)
+      ? 'image'
+      : mime.startsWith('audio/') || /\b(audio|sound|mp3|m4a|aac|opus|ogg|wav|flac)\b/.test(`${rawFormat} ${label}`)
+        ? 'audio'
+        : 'video');
 
   const formatFromText = KNOWN_FORMATS.find((candidate) => new RegExp(`(^|[^a-z0-9])${candidate}([^a-z0-9]|$)`, 'i').test(`${rawFormat} ${label}`));
   const formatFromMime = formatFromMimeType(mime);
@@ -97,26 +118,31 @@ export function normalizeMedia(media: Media): NormalizedMedia | null {
 
   const hasAudio = kind === 'audio'
     ? true
-    : /video\s*only|no\s*audio|without\s*audio|mute(d)?/i.test(descriptor)
+    : kind === 'image'
+      ? false
+      : /video\s*only|no\s*audio|without\s*audio|mute(d)?/i.test(descriptor)
       ? false
       : media.hasAudio ?? null;
 
   return {
     ...media,
     url,
-    label: media.label?.trim() || (kind === 'audio' ? format.toUpperCase() : 'Video'),
+    label: media.label?.trim() || (kind === 'audio' ? format.toUpperCase() : kind === 'image' ? 'Ảnh' : 'Video'),
     format,
     fileSize: Number.isFinite(media.fileSize) && Number(media.fileSize) > 0 ? Number(media.fileSize) : null,
     sizeStr: media.sizeStr?.trim() || null,
     kind,
-    mimeType: mime.startsWith('video/') || mime.startsWith('audio/') ? mime : inferMimeType(kind, format),
+    mimeType: mime.startsWith('video/') || mime.startsWith('audio/') || mime.startsWith('image/') ? mime : inferMimeType(kind, format),
     quality: media.quality && media.quality > 0 ? media.quality : qualityFromText(descriptor),
     hasAudio,
   };
 }
 
 export function compareMediaQuality(a: NormalizedMedia, b: NormalizedMedia): number {
-  if (a.kind !== b.kind) return a.kind === 'video' ? -1 : 1;
+  if (a.kind !== b.kind) {
+    const rank = { video: 0, image: 1, audio: 2 };
+    return rank[a.kind] - rank[b.kind];
+  }
   if (a.kind === 'video' && a.hasAudio !== b.hasAudio) {
     if (a.hasAudio === false) return 1;
     if (b.hasAudio === false) return -1;

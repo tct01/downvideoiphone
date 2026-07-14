@@ -2,7 +2,7 @@
   import { getBlobMediaMimeType, getMediaExtension, getMediaMimeType } from './lib/media-file';
   import { createClientSignatureHeaders } from './lib/client-signature';
 
-  type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null; kind?: 'video' | 'audio'; mimeType?: string | null; quality?: number | null; hasAudio?: boolean | null; proxyToken?: string; proxyExpires?: number };
+  type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null; kind?: 'video' | 'audio' | 'image'; mimeType?: string | null; quality?: number | null; hasAudio?: boolean | null; proxyToken?: string; proxyExpires?: number };
   type VideoResult = { title?: string | null; imageUrl?: string | null; duration?: string | null; media: Media; medias?: Media[] };
 
   const platforms = ['Youtube', 'Tiktok', 'Xiaohongshu', 'Instagram', 'Twitter/X', 'Douyin', 'Bilibili', 'Facebook', 'Kwai'];
@@ -114,7 +114,7 @@
       const payload = (await response.json()) as VideoResult & { error?: string };
 
       if (!response.ok || !payload.media) {
-        throw new Error(payload.error || 'Không tìm thấy video có thể tải từ liên kết này.');
+        throw new Error(payload.error || 'Không tìm thấy nội dung có thể tải từ liên kết này.');
       }
 
       if (runId !== preparationId) return;
@@ -146,7 +146,7 @@
       // Không hiển thị tên service bên thứ 3 trong thông báo lỗi
       error = msg && !msg.startsWith('primary:') && !msg.startsWith('fallback:') && msg !== 'no_media'
         ? msg
-        : 'Không thể tải video. Vui lòng thử lại.';
+        : 'Không thể tải nội dung. Vui lòng thử lại.';
     }
   }
 
@@ -201,7 +201,7 @@
       warmupTimer = null;
       if (!response.ok) {
         if ([403, 404, 410].includes(response.status)) throw new Error('refresh_media');
-        throw new Error('Không thể tải video. Vui lòng thử lại.');
+        throw new Error('Không thể tải nội dung. Vui lòng thử lại.');
       }
       const responseType = response.headers.get('content-type') || 'application/octet-stream';
       const declaredContentType = getMediaMimeType(media, responseType);
@@ -253,7 +253,8 @@
       const contentType = await getBlobMediaMimeType(blob, media, responseType);
       const nextFiles = [...preparedFiles];
       const normalizedBlob = blob.type === contentType ? blob : new Blob([blob], { type: contentType });
-      nextFiles[index] = new File([normalizedBlob], `clipsave-${Date.now()}.${getMediaExtension(media, contentType)}`, { type: contentType });
+      const fileLabel = media.kind === 'image' ? `image-${index + 1}` : media.kind === 'audio' ? 'audio' : 'video';
+      nextFiles[index] = new File([normalizedBlob], `clipsave-${fileLabel}-${Date.now()}.${getMediaExtension(media, contentType)}`, { type: contentType });
       preparedFiles = nextFiles;
       {
         displayedPercent = 100;
@@ -276,7 +277,7 @@
         const nextRefreshStates = [...mediaNeedsRefresh];
         nextRefreshStates[index] = cause instanceof Error && cause.message === 'refresh_media';
         mediaNeedsRefresh = nextRefreshStates;
-        error = 'Không thể tải video. Vui lòng thử lại.';
+        error = 'Không thể tải nội dung. Vui lòng thử lại.';
         status = 'error';
       }
     } finally {
@@ -312,7 +313,7 @@
 
       if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
         try {
-          await navigator.share({ files: [file], title: result?.title || 'Video' });
+          await navigator.share({ files: [file], title: result?.title || (file.type.startsWith('image/') ? 'Ảnh TikTok' : 'Video') });
           const resetFailures = [...shareFailures];
           resetFailures[index] = 0;
           shareFailures = resetFailures;
@@ -324,7 +325,7 @@
           const nextFailures = [...shareFailures];
           nextFailures[index] = (nextFailures[index] ?? 0) + 1;
           shareFailures = nextFailures;
-          error = 'Không thể tải video. Vui lòng thử lại.';
+          error = 'Không thể tải nội dung. Vui lòng thử lại.';
           status = 'error';
           return;
         }
@@ -332,7 +333,7 @@
       downloadPreparedFile(file);
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      error = 'Không thể tải video. Vui lòng thử lại.';
+      error = 'Không thể tải nội dung. Vui lòng thử lại.';
       status = 'error';
     } finally {
       savingIndex = null;
@@ -368,6 +369,10 @@
     const fmt = (media.format || '').toUpperCase();
     const allText = `${label} ${fmt}`;
 
+    if (media.kind === 'image' || (media.mimeType ?? '').startsWith('image/')) {
+      return { text: 'Ảnh', class: 'badge-image' };
+    }
+
     if (
       media.kind === 'audio' ||
       ['MP3', 'AAC', 'M4A', 'OPUS', 'OGG', 'WAV', 'FLAC'].includes(fmt) ||
@@ -390,8 +395,15 @@
 
   $: numProgress = mediaProgress.map((v) => (typeof v === 'number' ? Math.max(0, Math.min(100, v)) : null));
 
-  $: mediaCount = result?.medias?.length ?? 0;
   $: bestMedia = result?.medias?.[0] ?? null;
+  $: isImagePost = bestMedia?.kind === 'image';
+  $: imageItems = (result?.medias ?? [])
+    .map((media, index) => ({ media, index }))
+    .filter((item) => item.media.kind === 'image');
+  $: audioItems = (result?.medias ?? [])
+    .map((media, index) => ({ media, index }))
+    .filter((item) => item.media.kind === 'audio');
+  $: imageCount = imageItems.length;
 </script>
 
 <main>
@@ -407,18 +419,18 @@
     </div>
   </header>
 
-  <section class="composer" aria-label="Phân tích liên kết video">
-    <label for="video-link">Liên kết video</label>
+  <section class="composer" aria-label="Phân tích liên kết media">
+    <label for="video-link">Liên kết video hoặc bài ảnh</label>
     <div class="input-wrap" class:input-error={status === 'error' && !result}>
       {#if !link.trim()}
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.6 13.4a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66l-1.62 1.62m2.1 4.06a4 4 0 0 0-5.66 0l-2.83 2.83a4 4 0 1 0 5.66 5.66l1.61-1.61" /></svg>
       {/if}
-      <input id="video-link" bind:this={linkInput} bind:value={link} on:input={() => (pasteHint = false)} on:keydown={(event) => event.key === 'Enter' && analyse()} placeholder="Dán link video vào đây…" inputmode="url" autocomplete="url" />
+      <input id="video-link" bind:this={linkInput} bind:value={link} on:input={() => (pasteHint = false)} on:keydown={(event) => event.key === 'Enter' && analyse()} placeholder="Dán link video hoặc bài ảnh…" inputmode="url" autocomplete="url" />
       <button class="paste" type="button" on:click={pasteLink}>Dán</button>
     </div>
     {#if pasteHint}<p class="paste-hint">Chạm giữ trong ô rồi chọn <strong>Dán</strong>.</p>{/if}
     <button class="analyse" type="button" on:click={analyse} disabled={status === 'loading'}>
-      {#if status === 'loading'}<span class="mini-loader" aria-hidden="true"></span> Đang kiểm tra…{:else}Tải video <span aria-hidden="true">→</span>{/if}
+      {#if status === 'loading'}<span class="mini-loader" aria-hidden="true"></span> Đang kiểm tra…{:else}Tải xuống <span aria-hidden="true">→</span>{/if}
     </button>
   </section>
 
@@ -427,12 +439,12 @@
       <div class="story-lead">
         <p class="eyebrow">TIỆN ÍCH TẢI VIDEO</p>
         <h1 id="story-title">Tải video trực tuyến nhanh, chất lượng cao</h1>
-        <p>Dán liên kết để tải video TikTok, YouTube, Instagram, Facebook, Douyin và nhiều nền tảng. Chọn chất lượng phù hợp, xem trước rồi lưu trên điện thoại hoặc máy tính.</p>
+        <p>Dán liên kết để tải video TikTok, YouTube, Instagram, Facebook, Douyin và cả bài ảnh TikTok. Xem trước rồi lưu trên điện thoại hoặc máy tính.</p>
       </div>
       <ol class="story-steps">
         <li><span>01</span><div><strong>Dán liên kết</strong><small>Từ nền tảng bạn đang xem</small></div></li>
         <li><span>02</span><div><strong>Xem trước</strong><small>Kiểm tra đúng nội dung</small></div></li>
-        <li><span>03</span><div><strong>Lưu vào Album</strong><small>Lưu video vào điện thoại</small></div></li>
+        <li><span>03</span><div><strong>Lưu vào Album</strong><small>Lưu video hoặc ảnh vào điện thoại</small></div></li>
       </ol>
       <p class="platform-note"><span>Nền tảng hỗ trợ</span> YouTube · TikTok · Instagram · Facebook · Douyin · Bilibili · Kwai và nhiều nền tảng khác.</p>
     </section>
@@ -455,20 +467,103 @@
     <section class="result" aria-labelledby="result-title">
       <div class="result-heading">
         <p class="eyebrow">ĐÃ SẴN SÀNG</p>
-        <span>Chất lượng cao nhất</span>
+        <span>{isImagePost ? `${imageCount} ảnh` : 'Chất lượng cao nhất'}</span>
       </div>
-      <div class="preview">
-        {#if result.imageUrl}<img src={result.imageUrl} alt="Ảnh xem trước video" width="90" height="90" loading="lazy" decoding="async" referrerpolicy="no-referrer" />{:else}<div class="fallback-cover" aria-hidden="true">▶</div>{/if}
-        <div class="preview-copy"><h2 id="result-title">{result.title || 'Video đã tìm thấy'}</h2><p>{selectedPlatform} · Video công khai</p></div>
-      </div>
-      {#if previewingIndex === 0 && bestMedia}
-        <div class="video-viewer">
-          <div class="viewer-head"><strong>Xem trước video</strong><button type="button" on:click={() => (previewingIndex = null)} aria-label="Đóng trình xem">Đóng</button></div>
-          <!-- svelte-ignore a11y_media_has_caption -->
-          <video src={getMediaProxyUrl(bestMedia, true)} poster={result.imageUrl || undefined} controls playsinline preload="metadata"></video>
+      {#if !isImagePost}
+        <div class="preview">
+          {#if result.imageUrl}<img src={result.imageUrl} alt="Ảnh xem trước video" width="90" height="90" loading="lazy" decoding="async" referrerpolicy="no-referrer" />{:else}<div class="fallback-cover" aria-hidden="true">▶</div>{/if}
+          <div class="preview-copy"><h2 id="result-title">{result.title || 'Video đã tìm thấy'}</h2><p>{selectedPlatform} · Video công khai</p></div>
         </div>
+      {:else}
+        <h2 id="result-title" class="sr-only">{result.title || 'Bài ảnh đã tìm thấy'}</h2>
       {/if}
-      {#if bestMedia}
+      {#if isImagePost}
+        {#if imageItems.length > 0}
+          <div class="image-collection" aria-label={`Danh sách ${imageCount} ảnh trong bài TikTok`}>
+            <div class="collection-heading">
+              <h3>Ảnh trong bài</h3>
+              <span>{imageCount} ảnh</span>
+            </div>
+            <div class="image-list">
+              {#each imageItems as item, position}
+                <div class="image-item">
+                  <img class="image-thumbnail" src={getMediaProxyUrl(item.media, true)} alt={`Ảnh ${position + 1} trong bài TikTok`} width="82" height="82" loading="lazy" decoding="async" />
+                  <div class="image-item-content">
+                    <div class="image-item-title"><strong>Ảnh {position + 1}</strong><span>{(item.media.format || 'Ảnh').toUpperCase()}</span></div>
+                    <div class="image-actions">
+                      <button class="view" type="button" on:click={() => (previewingIndex = previewingIndex === item.index ? null : item.index)}>
+                        {previewingIndex === item.index ? 'Đóng ảnh' : 'Xem ảnh'}
+                      </button>
+                      <button class="save" type="button" on:click={() => saveMedia(item.media, item.index)} disabled={mediaStates[item.index] === 'loading' || savingIndex === item.index}>
+                        {#if mediaStates[item.index] === 'loading'}
+                          <span class:indeterminate={numProgress[item.index] === null} class="download-progress" style={`--progress-ratio: ${(numProgress[item.index] ?? 0) / 100}`} aria-hidden="true"></span>
+                          <span class="download-button-content"><span class="mini-loader" aria-hidden="true"></span>{numProgress[item.index] !== null ? `${numProgress[item.index]}%` : mediaProgress[item.index] || 'Đang tải…'}</span>
+                        {:else if savingIndex === item.index}
+                          <span class="download-button-content"><span class="mini-loader" aria-hidden="true"></span> Đang mở…</span>
+                        {:else if mediaStates[item.index] === 'error'}
+                          <span class="download-button-content">{mediaNeedsRefresh[item.index] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span></span>
+                        {:else if mediaStates[item.index] === 'ready'}
+                          <span class="download-button-content">Lưu ảnh <span aria-hidden="true">↑</span></span>
+                        {:else}
+                          <span class="download-button-content">Tải ảnh <span aria-hidden="true">↓</span></span>
+                        {/if}
+                      </button>
+                    </div>
+                  </div>
+                  {#if previewingIndex === item.index}
+                    <div class="image-preview-panel">
+                      <div class="viewer-head"><strong>Ảnh {position + 1}</strong><button type="button" on:click={() => (previewingIndex = null)} aria-label={`Đóng ảnh ${position + 1}`}>Đóng</button></div>
+                      <img src={getMediaProxyUrl(item.media, true)} alt={`Ảnh ${position + 1} kích thước đầy đủ`} />
+                    </div>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if audioItems.length > 0}
+          <div class="options-accordion media-extras">
+            <button class="accordion-toggle" type="button" on:click={() => (showAllOptions = !showAllOptions)}>
+              {showAllOptions ? 'Ẩn âm thanh ▲' : 'Âm thanh của bài viết ▼'}
+            </button>
+            {#if showAllOptions}
+              <div class="accordion-content">
+                {#each audioItems as item}
+                  <div class="option-row">
+                    <span class="option-label">
+                      <span class={`quality-badge ${getQualityBadge(item.media).class}`}>{getQualityBadge(item.media).text}</span>
+                      <strong>{item.media.label || 'Âm thanh'}</strong>
+                      {#if item.media.sizeStr}<span class="size-badge">{item.media.sizeStr}</span>{/if}
+                    </span>
+                    <button class="save-option" type="button" on:click={() => saveMedia(item.media, item.index)} disabled={mediaStates[item.index] === 'loading' || savingIndex === item.index}>
+                      {#if mediaStates[item.index] === 'loading'}
+                        <span class:indeterminate={numProgress[item.index] === null} class="download-progress" style={`--progress-ratio: ${(numProgress[item.index] ?? 0) / 100}`} aria-hidden="true"></span>
+                        <span class="download-button-content"><span class="mini-loader" aria-hidden="true"></span>{numProgress[item.index] !== null ? `${numProgress[item.index]}%` : mediaProgress[item.index] || 'Đang tải…'}</span>
+                      {:else if savingIndex === item.index}
+                        <span class="download-button-content"><span class="mini-loader" aria-hidden="true"></span> Đang mở…</span>
+                      {:else if mediaStates[item.index] === 'error'}
+                        <span class="download-button-content">{mediaNeedsRefresh[item.index] ? 'Tải lại' : 'Thử lại'} <span aria-hidden="true">↻</span></span>
+                      {:else if mediaStates[item.index] === 'ready'}
+                        <span class="download-button-content">Lưu <span aria-hidden="true">↑</span></span>
+                      {:else}
+                        <span class="download-button-content">Tải <span aria-hidden="true">↑</span></span>
+                      {/if}
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+      {:else if bestMedia}
+        {#if previewingIndex === 0}
+          <div class="video-viewer">
+            <div class="viewer-head"><strong>Xem trước video</strong><button type="button" on:click={() => (previewingIndex = null)} aria-label="Đóng trình xem">Đóng</button></div>
+            <!-- svelte-ignore a11y_media_has_caption -->
+            <video src={getMediaProxyUrl(bestMedia, true)} poster={result.imageUrl || undefined} controls playsinline preload="metadata"></video>
+          </div>
+        {/if}
         <div class="downloads">
           <div class="download-row">
             <div class="row-actions">
@@ -514,7 +609,7 @@
                       <div class="option-row">
                         <span class="option-label">
                           <span class={`quality-badge ${getQualityBadge(media).class}`}>{getQualityBadge(media).text}</span>
-                          <strong>{media.label || media.format || 'Video'}</strong>
+                          <strong>{media.label || media.format || (media.kind === 'image' ? 'Ảnh' : 'Video')}</strong>
                           {#if media.sizeStr}<span class="size-badge">{media.sizeStr}</span>{/if}
                         </span>
                         <button class="save-option" type="button" on:click={() => saveMedia(media, index)} disabled={mediaStates[index] === 'loading' || savingIndex === index}>
@@ -552,7 +647,7 @@
           {/if}
         </div>
       {/if}
-      <aside class="ios-tip"><span aria-hidden="true">↑</span><p><strong>Trên iPhone:</strong> chạm <em>Tải & lưu</em>, sau đó chọn <em>Lưu video</em> để đưa vào Album trên điện thoại.</p></aside>
+      <aside class="ios-tip"><span aria-hidden="true">↑</span><p><strong>Trên iPhone:</strong> {isImagePost ? 'chạm Tải ảnh, đợi nút đổi thành Lưu ảnh, rồi chọn Lưu hình ảnh trong bảng chia sẻ.' : 'chạm Tải & lưu, sau đó chọn Lưu video để đưa vào Album trên điện thoại.'}</p></aside>
     </section>
   {/if}
 

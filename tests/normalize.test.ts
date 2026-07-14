@@ -51,3 +51,15 @@ test('upgrades provider media URLs from HTTP to HTTPS', () => {
   assert.equal(normalized.medias[0]?.url, 'https://sns-video.example/video.mp4');
   assert.equal(normalized.medias[0]?.format, 'mp4');
 });
+
+test('preserves TikTok carousel images as image media', () => {
+  const normalized = normalizeVideoData({ medias: [
+    { url: 'https://p16-sign.tiktokcdn.com/photo', label: 'Ảnh 1', format: 'jpg', kind: 'image' },
+    { url: 'https://sf16.tiktokcdn.com/music', label: 'Audio', format: 'mp3', kind: 'audio' },
+  ] });
+
+  assert.equal(normalized.medias[0]?.kind, 'image');
+  assert.equal(normalized.medias[0]?.format, 'jpg');
+  assert.equal(normalized.medias[0]?.mimeType, 'image/jpeg');
+  assert.equal(normalized.medias[1]?.kind, 'audio');
+});

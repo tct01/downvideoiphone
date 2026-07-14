@@ -5,10 +5,10 @@
 product
 
 ## Users
-Vietnamese iPhone users who need a fast, low-friction way to prepare a public video link for saving to their device. Their primary task is paste, inspect, and save one piece of media without creating an account.
+Vietnamese iPhone users who need a fast, low-friction way to prepare a public video or TikTok photo-post link for saving to their device. Their primary task is paste, inspect, and save media without creating an account.
 
 ## Product Purpose
-ClipSave turns a supported public link into a clear video preview and one or more save actions. Success means the user understands what will be saved and can reach the iOS save/share flow with minimal waiting.
+ClipSave turns a supported public link into a clear video or image preview and one or more save actions. Success means the user understands what will be saved and can reach the iOS save/share flow with minimal waiting.
 
 ## Brand Personality
 Clear, discreet, reassuring. It should feel like a focused iPhone utility, not an ad-heavy downloader.
@@ -19,7 +19,7 @@ Avoid cluttered ad-network downloader sites, fake download buttons, dark neon me
 ## Design Principles
 - Make the single next action obvious.
 - Explain iOS constraints honestly at the moment they matter.
-- Keep media preview informative without making it compete with the task.
+- Keep video and image previews informative without making them compete with the task.
 - Treat errors as recoverable states with a practical next step.
 
 ## Accessibility & Inclusion

@@ -2,7 +2,7 @@ import { probeMediaUrl } from './remote-media.js';
 import type { VideoData } from './types.js';
 
 /**
- * Interface mà mọi video provider phải implement.
+ * Interface mà mọi media provider phải implement.
  *
  * Mỗi provider chịu trách nhiệm:
  * 1. Gọi API bên thứ 3

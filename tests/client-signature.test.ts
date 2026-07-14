@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GET } from '../api/video.js';
+import { GET, providersForLink } from '../api/video.js';
 import {
   createExpectedClientSignature,
   verifyClientSignature,
@@ -29,4 +29,19 @@ test('accepts a fresh client signature and rejects tampering or stale requests',
     if (previousKey === undefined) delete process.env.CLIENT_SIGNATURE_KEY;
     else process.env.CLIENT_SIGNATURE_KEY = previousKey;
   }
+});
+
+test('uses platform-specific provider priorities for TikTok and YouTube', () => {
+  assert.deepEqual(
+    providersForLink('https://www.tiktok.com/@user/photo/123').map((provider) => provider.name),
+    ['seekin', 'tikwm', 'snap-video', 'gendownload'],
+  );
+  assert.deepEqual(
+    providersForLink('https://www.youtube.com/watch?v=example').map((provider) => provider.name),
+    ['gendownload', 'seekin', 'snap-video', 'tikwm'],
+  );
+  assert.deepEqual(
+    providersForLink('https://youtu.be/example').map((provider) => provider.name),
+    ['gendownload', 'seekin', 'snap-video', 'tikwm'],
+  );
 });
