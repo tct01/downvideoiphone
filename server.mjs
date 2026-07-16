@@ -1,17 +1,27 @@
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { loadEnv } from 'vite';
 import { GET as getVideo } from './api/video.ts';
 import { GET as getMedia } from './api/media.ts';
 
-const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
-const fileEnv = loadEnv(mode, process.cwd(), '');
-for (const [name, value] of Object.entries(fileEnv)) {
-  if (process.env[name] === undefined) process.env[name] = value;
+/** Read .env file and merge into process.env (does not override existing vars). */
+function loadDotenv(dir) {
+  const envPath = join(dir, '.env');
+  if (!existsSync(envPath)) return;
+  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx <= 0) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim().replace(/^(['"])(.*)\1$/, '$2');
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
 }
+
+loadDotenv(process.cwd());
 
 const root = join(fileURLToPath(new URL('.', import.meta.url)), 'dist');
 const port = Number(process.env.PORT || 5173);

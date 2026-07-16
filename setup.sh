@@ -87,6 +87,18 @@ if (( NODE_MAJOR < 20 )); then
   fail "Cần Node.js 20 trở lên, phiên bản hiện tại: $(node --version)"
 fi
 
+# ── Swap 2 GB (tránh OOM khi build trên VPS RAM thấp) ────────────────────────
+if ! swapon --show | grep -q '/swapfile'; then
+  info "Tạo swap 2 GB"
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '/swapfile' /etc/fstab || printf '/swapfile none swap sw 0 0\n' >> /etc/fstab
+  sysctl -w vm.swappiness=10 >/dev/null
+  grep -q '^vm.swappiness' /etc/sysctl.conf || printf 'vm.swappiness=10\n' >> /etc/sysctl.conf
+fi
+
 info "Chuẩn bị ứng dụng tại ${APP_DIR}"
 if ! id "${APP_USER}" >/dev/null 2>&1; then
   useradd --system --home-dir "${APP_DIR}" --shell /usr/sbin/nologin "${APP_USER}"
@@ -150,7 +162,7 @@ if runuser -u "${APP_USER}" -- env HOME="${APP_DIR}" "${PM2_BIN}" describe "${AP
     PORT="${APP_PORT}" \
     MEDIA_PROXY_SECRET="${MEDIA_PROXY_SECRET}" \
     CLIENT_SIGNATURE_KEY="${CLIENT_SIGNATURE_KEY}" \
-    "${PM2_BIN}" restart "${APP_NAME}" --update-env
+    "${PM2_BIN}" restart "${APP_NAME}" --update-env --max-memory-restart 400M
 else
   runuser -u "${APP_USER}" -- env \
     HOME="${APP_DIR}" \
@@ -161,11 +173,17 @@ else
     "${PM2_BIN}" start "${NPM_BIN}" \
       --name "${APP_NAME}" \
       --cwd "${APP_DIR}" \
+      --max-memory-restart 400M \
       -- start
 fi
 
 runuser -u "${APP_USER}" -- env HOME="${APP_DIR}" "${PM2_BIN}" save
 "${PM2_BIN}" startup systemd -u "${APP_USER}" --hp "${APP_DIR}"
+
+# Cài pm2-logrotate để log không phình vô hạn
+if ! runuser -u "${APP_USER}" -- env HOME="${APP_DIR}" "${PM2_BIN}" describe pm2-logrotate >/dev/null 2>&1; then
+  runuser -u "${APP_USER}" -- env HOME="${APP_DIR}" "${PM2_BIN}" install pm2-logrotate || true
+fi
 
 APP_READY=0
 for _ in {1..20}; do
@@ -189,8 +207,30 @@ if [[ -n "${WWW_DOMAIN}" ]]; then
   CERTBOT_DOMAINS+=(-d "${WWW_DOMAIN}")
 fi
 
+# ── Redirect non-www → www (tránh duplicate content cho SEO) ─────────────────
+PRIMARY_DOMAIN="${DOMAIN}"
+if [[ -n "${WWW_DOMAIN}" ]]; then
+  PRIMARY_DOMAIN="${WWW_DOMAIN}"
+fi
+
 info "Cấu hình Nginx cho ${SERVER_NAMES}"
 cat > "${NGINX_FILE}" <<EOF
+# Gzip compression
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_min_length 256;
+gzip_comp_level 5;
+gzip_types
+    text/plain
+    text/css
+    text/javascript
+    application/json
+    application/javascript
+    application/xml
+    application/manifest+json
+    image/svg+xml;
+
 server {
     listen 80;
     listen [::]:80;
@@ -198,6 +238,24 @@ server {
 
     client_max_body_size 2m;
     large_client_header_buffers 4 16k;
+
+    # Security headers
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    # Service Worker — không cache để PWA luôn cập nhật
+    location = /sw.js {
+        proxy_pass http://127.0.0.1:${APP_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        add_header Cache-Control "public, max-age=0, must-revalidate" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
 
     location /api/media {
         proxy_pass http://127.0.0.1:${APP_PORT};
@@ -227,6 +285,20 @@ server {
     }
 }
 EOF
+
+# Thêm redirect block non-www → www nếu user chọn cấu hình www
+if [[ -n "${WWW_DOMAIN}" ]]; then
+  cat >> "${NGINX_FILE}" <<EOF
+
+# Redirect non-www → www (SEO: tránh duplicate content)
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    return 301 https://${WWW_DOMAIN}\$request_uri;
+}
+EOF
+fi
 
 ln -sfn "${NGINX_FILE}" "/etc/nginx/sites-enabled/${APP_NAME}"
 rm -f /etc/nginx/sites-enabled/default
