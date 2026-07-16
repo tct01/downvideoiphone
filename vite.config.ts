@@ -11,6 +11,9 @@ export default defineConfig(({ mode }) => {
   const clientSignatureKey = configuredClientKey || 'clipsave-client-development-only';
 
   return {
+    build: {
+      target: 'safari12',
+    },
     define: {
       __CLIENT_SIGNATURE_KEY__: JSON.stringify(clientSignatureKey),
     },

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { getBlobMediaMimeType, getMediaExtension, getMediaMimeType } from './lib/media-file';
   import { createClientSignatureHeaders } from './lib/client-signature';
+  import { fetchWithTimeout } from './lib/fetch-with-timeout';
 
   type Media = { url: string; label?: string | null; format?: string | null; fileSize?: number | null; sizeStr?: string | null; kind?: 'video' | 'audio' | 'image'; mimeType?: string | null; quality?: number | null; hasAudio?: boolean | null; proxyToken?: string; proxyExpires?: number };
   type VideoResult = { title?: string | null; imageUrl?: string | null; duration?: string | null; media: Media; medias?: Media[] };
@@ -106,10 +107,9 @@
       const normalizedLink = link.trim();
       reqUrl.searchParams.set('link', normalizedLink);
       const signatureHeaders = await createClientSignatureHeaders(normalizedLink);
-      const response = await fetch(reqUrl.toString(), {
+      const response = await fetchWithTimeout(reqUrl.toString(), {
         headers: { Accept: 'application/json', ...signatureHeaders },
-        signal: AbortSignal.timeout(40_000)
-      });
+      }, 40_000);
 
       const payload = (await response.json()) as VideoResult & { error?: string };
 
